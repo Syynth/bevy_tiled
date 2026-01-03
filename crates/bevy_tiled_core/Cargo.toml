@@ -1,0 +1,23 @@
+[package]
+name = "bevy_tiled_core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+readme = "README.md"
+keywords = ["bevy", "tiled", "assets", "gamedev"]
+
+[dependencies]
+bevy_tiled_assets = { path = "../bevy_tiled_assets" }
+bevy = { version = "0.17", default-features = false, features = ["bevy_asset"] }
+tiled = "0.15"
+thiserror = "2"
+
+[dev-dependencies]
+bevy = { version = "0.17", default-features = true }
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lints]
+workspace = true
