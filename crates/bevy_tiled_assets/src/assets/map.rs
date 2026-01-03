@@ -37,6 +37,16 @@ pub struct TiledMapAsset {
     // ===== CUSTOM PROPERTIES =====
     /// Custom properties set on the map in Tiled
     pub properties: crate::properties::Properties,
+
+    /// Custom properties set on layers
+    /// Key: Layer ID
+    /// Value: Properties for that layer
+    pub layer_properties: HashMap<u32, crate::properties::Properties>,
+
+    /// Custom properties set on objects
+    /// Key: Object ID
+    /// Value: Properties for that object
+    pub object_properties: HashMap<u32, crate::properties::Properties>,
 }
 
 #[derive(Debug, Clone)]

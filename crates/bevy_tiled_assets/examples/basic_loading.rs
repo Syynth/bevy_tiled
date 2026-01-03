@@ -163,6 +163,18 @@ fn check_assets_loaded(
                 info!("    {}: {:?}", key, value);
             }
         }
+
+        // Log layer properties
+        let layers_with_props = map_asset.layer_properties.len();
+        if layers_with_props > 0 {
+            info!("  Layers with custom properties: {}", layers_with_props);
+        }
+
+        // Log object properties
+        let objects_with_props = map_asset.object_properties.len();
+        if objects_with_props > 0 {
+            info!("  Objects with custom properties: {}", objects_with_props);
+        }
     }
 
     // world properties

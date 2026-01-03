@@ -113,7 +113,27 @@ impl AssetLoader for TiledMapAssetLoader {
             // 8. Extract custom properties
             let properties = map.properties.clone();
 
-            // 9. Build asset
+            // 9. Extract layer properties
+            let mut layer_properties = HashMap::default();
+            for layer in map.layers() {
+                if !layer.properties.is_empty() {
+                    layer_properties.insert(layer.id(), layer.properties.clone());
+                }
+            }
+
+            // 10. Extract object properties from all object layers
+            let mut object_properties = HashMap::default();
+            for layer in map.layers() {
+                if let Some(object_layer) = layer.as_object_layer() {
+                    for object in object_layer.objects() {
+                        if !object.properties.is_empty() {
+                            object_properties.insert(object.id(), object.properties.clone());
+                        }
+                    }
+                }
+            }
+
+            // 11. Build asset
             Ok(TiledMapAsset {
                 map,
                 tilesets,
@@ -126,6 +146,8 @@ impl AssetLoader for TiledMapAssetLoader {
                 topleft_chunk,
                 bottomright_chunk,
                 properties,
+                layer_properties,
+                object_properties,
             })
         }
     }
