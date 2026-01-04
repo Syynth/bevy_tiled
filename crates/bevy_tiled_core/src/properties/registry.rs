@@ -7,7 +7,7 @@ use bevy::prelude::*;
 use std::any::TypeId;
 use std::collections::HashMap;
 use std::string::String;
-use tiled::Properties;
+use tiled::{Properties, PropertyValue};
 
 /// Tiled property type kind.
 ///
@@ -65,6 +65,54 @@ pub struct TiledFieldInfo {
     pub default_value: TiledDefaultValue,
 }
 
+/// Kind of enum variant (unit, struct, or tuple).
+#[derive(Debug, Clone)]
+pub enum TiledVariantKind {
+    /// Unit variant (e.g., `None`, `North`)
+    Unit,
+    /// Struct variant with named fields (e.g., `Projectile { speed: f32, damage: i32 }`)
+    Struct { fields: &'static [TiledFieldInfo] },
+    /// Tuple variant with positional fields (e.g., `Dash(Vec2, f32)`)
+    ///
+    /// Field names are integers: "0", "1", "2", etc.
+    Tuple { fields: &'static [TiledFieldInfo] },
+}
+
+/// Information about a single variant in an enum.
+#[derive(Debug, Clone)]
+pub struct TiledVariantInfo {
+    /// Variant name (e.g., "North", "Projectile", "Dash")
+    pub name: &'static str,
+
+    /// Variant kind and associated field data
+    pub kind: TiledVariantKind,
+
+    /// Whether this variant has the `#[default]` attribute
+    pub is_default: bool,
+}
+
+/// Kind of enum (simple unit-variant or complex with struct/tuple variants).
+#[derive(Debug, Clone)]
+pub enum TiledEnumKind {
+    /// Simple enum with only unit variants (e.g., `Direction { North, South, East, West }`)
+    ///
+    /// Exported as Tiled's native enum type with dropdown UI.
+    Simple {
+        /// List of variant names
+        variants: &'static [&'static str],
+        /// Function to deserialize a string variant name into this enum type
+        from_string: fn(&str) -> Result<Box<dyn Reflect>, String>,
+    },
+
+    /// Complex enum with struct and/or tuple variants (e.g., `Attack { None, Melee { damage: i32 } }`)
+    ///
+    /// Exported as Tiled class type with `:variant` discriminant field.
+    Complex {
+        /// Information about each variant
+        variant_info: &'static [TiledVariantInfo],
+    },
+}
+
 /// Information about a registered `TiledClass` type.
 ///
 /// This struct is submitted via `inventory::submit!` by the `TiledClass` derive macro.
@@ -94,28 +142,100 @@ inventory::collect!(TiledClassInfo);
 /// Information about a registered `TiledClass` enum type.
 ///
 /// This struct is submitted via `inventory::submit!` by the `TiledClass` derive macro
-/// for unit-variant enums. Each registered enum provides:
+/// for both simple (unit-variant) and complex (struct/tuple variant) enums.
+/// Each registered enum provides:
 /// - Its `TypeId` for reflection lookups
 /// - A display name matching the Tiled custom enum name
-/// - List of variant names for JSON export and deserialization
-/// - A deserialization function to convert strings to enum variants
+/// - Enum kind (simple or complex) with variant information
+/// - A deserialization function to convert property values to enum variants
 pub struct TiledEnumInfo {
     /// The `TypeId` of the registered enum
     pub type_id: TypeId,
 
-    /// The name used in Tiled custom properties (e.g., `"game::Direction"`)
+    /// The name used in Tiled custom properties (e.g., `"game::Direction"`, `"game::Attack"`)
     pub name: &'static str,
 
-    /// List of variant names (e.g., `["North", "South", "East", "West"]`)
-    pub variants: &'static [&'static str],
+    /// Enum kind (simple or complex) with associated variant data
+    pub kind: TiledEnumKind,
 
-    /// Function to deserialize a string variant name into this enum type
-    /// Returns a boxed reflected enum or an error message
-    pub from_string: fn(&str) -> Result<Box<dyn Reflect>, String>,
+    /// Function to deserialize a property value into this enum type
+    ///
+    /// For simple enums, accepts `StringValue` with variant name.
+    /// For complex enums, accepts `ClassValue` with `:variant` discriminant field.
+    /// Returns a boxed reflected enum or an error message.
+    pub from_property: fn(&PropertyValue) -> Result<Box<dyn Reflect>, String>,
 }
 
 // Collect all TiledEnumInfo submissions at compile time
 inventory::collect!(TiledEnumInfo);
+
+impl TiledEnumInfo {
+    /// Get all variant names for this enum.
+    ///
+    /// Returns a slice of variant names in the order they're defined.
+    pub fn variant_names(&self) -> Vec<&'static str> {
+        match &self.kind {
+            TiledEnumKind::Simple { variants, .. } => variants.to_vec(),
+            TiledEnumKind::Complex { variant_info } => {
+                variant_info.iter().map(|v| v.name).collect()
+            }
+        }
+    }
+
+    /// Check if this is a simple (unit-variant only) enum.
+    pub fn is_simple(&self) -> bool {
+        matches!(self.kind, TiledEnumKind::Simple { .. })
+    }
+
+    /// Check if this is a complex (struct/tuple variant) enum.
+    pub fn is_complex(&self) -> bool {
+        matches!(self.kind, TiledEnumKind::Complex { .. })
+    }
+
+    /// Get variant information by name (for complex enums).
+    ///
+    /// Returns `None` if this is a simple enum or if the variant doesn't exist.
+    pub fn get_variant(&self, name: &str) -> Option<&TiledVariantInfo> {
+        match &self.kind {
+            TiledEnumKind::Simple { .. } => None,
+            TiledEnumKind::Complex { variant_info } => {
+                variant_info.iter().find(|v| v.name == name)
+            }
+        }
+    }
+
+    /// Get the default variant name if one exists.
+    ///
+    /// Returns `None` if no variant has the `#[default]` attribute.
+    pub fn default_variant_name(&self) -> Option<&'static str> {
+        match &self.kind {
+            TiledEnumKind::Simple { .. } => None,
+            TiledEnumKind::Complex { variant_info } => {
+                variant_info.iter().find(|v| v.is_default).map(|v| v.name)
+            }
+        }
+    }
+
+    /// Get the variant info slice for complex enums.
+    ///
+    /// Returns `None` if this is a simple enum.
+    pub fn variant_info(&self) -> Option<&[TiledVariantInfo]> {
+        match &self.kind {
+            TiledEnumKind::Simple { .. } => None,
+            TiledEnumKind::Complex { variant_info } => Some(variant_info),
+        }
+    }
+
+    /// Get the `from_string` function for simple enums.
+    ///
+    /// Returns `None` if this is a complex enum.
+    pub fn from_string_fn(&self) -> Option<fn(&str) -> Result<Box<dyn Reflect>, String>> {
+        match &self.kind {
+            TiledEnumKind::Simple { from_string, .. } => Some(*from_string),
+            TiledEnumKind::Complex { .. } => None,
+        }
+    }
+}
 
 /// Registry of all types with `#[derive(TiledClass)]`.
 ///

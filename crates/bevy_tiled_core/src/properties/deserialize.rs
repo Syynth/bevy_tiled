@@ -291,17 +291,25 @@ pub fn deserialize_enum_from_string(
     // 1. Try TiledClass enum registry first
     let tiled_registry = app.world().resource::<TiledClassRegistry>();
     if let Some(enum_info) = tiled_registry.get_enum(enum_name) {
-        return (enum_info.from_string)(variant_str).map_err(DeserializeError::TypeError);
+        // For simple enums, use the from_string function
+        if let Some(from_string) = enum_info.from_string_fn() {
+            return from_string(variant_str).map_err(DeserializeError::TypeError);
+        }
+        // For complex enums, this function shouldn't be called (use ClassValue instead)
+        return Err(DeserializeError::TypeError(format!(
+            "Enum '{}' is a complex enum and cannot be deserialized from a string. Use ClassValue with :variant field.",
+            enum_name
+        )));
     }
 
     // 2. Fall back to Bevy reflection
     let app_type_registry = app.world().resource::<AppTypeRegistry>();
     let registry = app_type_registry.read();
 
-    if let Some(reflect_type) = registry.get_with_type_path(enum_name) {
-        if let TypeInfo::Enum(enum_info) = reflect_type.type_info() {
-            return deserialize_enum_via_reflection(enum_info, variant_str);
-        }
+    if let Some(reflect_type) = registry.get_with_type_path(enum_name)
+        && let TypeInfo::Enum(enum_info) = reflect_type.type_info()
+    {
+        return deserialize_enum_via_reflection(enum_info, variant_str);
     }
 
     // 3. Type not found
@@ -311,10 +319,10 @@ pub fn deserialize_enum_from_string(
 /// Deserialize an enum using Bevy's reflection system.
 ///
 /// This is a helper function for reflection-based enum deserialization.
-/// Currently only supports unit variants via TiledClass registry.
+/// Currently only supports unit variants via `TiledClass` registry.
 ///
 /// Note: Full reflection-based enum deserialization is not yet implemented
-/// because DynamicEnum construction requires additional trait bounds.
+/// because `DynamicEnum` construction requires additional trait bounds.
 /// Use `#[derive(TiledClass)]` on your enum types for proper deserialization.
 fn deserialize_enum_via_reflection(
     enum_info: &bevy::reflect::EnumInfo,

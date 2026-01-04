@@ -1,7 +1,7 @@
-//! Demonstrates TiledClass type export with Vec2/Vec3 fields and hybrid type resolution.
+//! Demonstrates `TiledClass` type export with Vec2/Vec3 fields and hybrid type resolution.
 //!
 //! This example shows:
-//! 1. Defining TiledClass types with vector fields
+//! 1. Defining `TiledClass` types with vector fields
 //! 2. Exporting type definitions to JSON for Tiled editor
 //! 3. How Vec2/Vec3 are properly exported as class types with propertyType
 
@@ -15,6 +15,7 @@ fn main() {
     // Add minimal plugins
     app.add_plugins(MinimalPlugins);
     app.add_plugins(AssetPlugin::default());
+    app.add_plugins(bevy::log::LogPlugin::default());
 
     // Add BevyTiledCorePlugin which registers the TiledClassRegistry
     app.add_plugins(BevyTiledCorePlugin::default());
@@ -30,11 +31,11 @@ fn main() {
     // Export types directly (not in a system since we need access to &App)
     export_types(&app);
 
-    println!("✅ Type export demo completed!");
-    println!("Check the generated custom-types.json file");
+    info!("✅ Type export demo completed!");
+    info!("Check the generated custom-types.json file");
 }
 
-/// Example TiledClass with Vec2 field
+/// Example `TiledClass` with Vec2 field
 #[derive(Component, Reflect, TiledClass, Default)]
 #[tiled(name = "demo::SpawnPoint")]
 struct SpawnPoint {
@@ -44,7 +45,7 @@ struct SpawnPoint {
     active: bool,
 }
 
-/// Example TiledClass with Vec3 field and reference to another TiledClass
+/// Example `TiledClass` with Vec3 field and reference to another `TiledClass`
 #[derive(Component, Reflect, TiledClass, Default)]
 #[tiled(name = "demo::Teleporter")]
 struct Teleporter {
@@ -70,7 +71,7 @@ struct Enemy {
 }
 
 fn export_types(app: &App) {
-    println!("🔧 Exporting type definitions...");
+    info!("🔧 Exporting type definitions...");
 
     // Export using the hybrid approach (TiledClass + Reflection)
     match bevy_tiled_core::properties::export::export_all_types_with_reflection(
@@ -78,22 +79,22 @@ fn export_types(app: &App) {
         "custom-types.json",
     ) {
         Ok(()) => {
-            println!("✅ Successfully exported types to custom-types.json");
-            println!("\n📝 Exported types:");
-            println!("  - demo::SpawnPoint (with Vec2 position)");
-            println!("  - demo::Teleporter (with Vec3 position)");
-            println!("  - demo::Enemy (with Vec2 spawn_pos)");
-            println!("  - glam::Vec2 (auto-discovered via reflection)");
-            println!("  - glam::Vec3 (auto-discovered via reflection)");
+            info!("✅ Successfully exported types to custom-types.json");
+            info!("\n📝 Exported types:");
+            info!("  - demo::SpawnPoint (with Vec2 position)");
+            info!("  - demo::Teleporter (with Vec3 position)");
+            info!("  - demo::Enemy (with Vec2 spawn_pos)");
+            info!("  - glam::Vec2 (auto-discovered via reflection)");
+            info!("  - glam::Vec3 (auto-discovered via reflection)");
 
-            println!("\n💡 To use in Tiled:");
-            println!("  1. Open Tiled editor");
-            println!("  2. View → Custom Types → Import Custom Types");
-            println!("  3. Select custom-types.json");
-            println!("  4. Your types will appear in property dropdowns!");
+            info!("\n💡 To use in Tiled:");
+            info!("  1. Open Tiled editor");
+            info!("  2. View → Custom Types → Import Custom Types");
+            info!("  3. Select custom-types.json");
+            info!("  4. Your types will appear in property dropdowns!");
         }
         Err(e) => {
-            eprintln!("❌ Failed to export types: {}", e);
+            error!("❌ Failed to export types: {}", e);
         }
     }
 }

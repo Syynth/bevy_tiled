@@ -18,8 +18,8 @@ pub use export::{
     TiledMemberExport, TiledTypeExport, TiledTypeOrEnumExport, TiledValueExport,
 };
 pub use registry::{
-    TiledClassInfo, TiledClassRegistry, TiledDefaultValue, TiledEnumInfo, TiledFieldInfo,
-    TiledTypeKind,
+    TiledClassInfo, TiledClassRegistry, TiledDefaultValue, TiledEnumInfo, TiledEnumKind,
+    TiledFieldInfo, TiledTypeKind, TiledVariantInfo, TiledVariantKind,
 };
 
 /// Pre-merged properties stored as a component.

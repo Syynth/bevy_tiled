@@ -12,7 +12,10 @@ use bevy::app::App;
 use bevy::prelude::*;
 use bevy::reflect::{TypeInfo, TypeRegistry, TypeRegistration};
 
-use super::registry::{TiledClassRegistry, TiledDefaultValue, TiledTypeKind};
+use super::registry::{
+    TiledClassRegistry, TiledDefaultValue, TiledEnumInfo, TiledEnumKind, TiledTypeKind,
+    TiledVariantKind,
+};
 
 /// Intermediate representation of a Tiled custom property type for serialization.
 #[derive(Debug, Clone, PartialEq)]
@@ -161,11 +164,19 @@ pub fn build_enum_export_data(registry: &TiledClassRegistry) -> Vec<TiledEnumExp
     registry
         .iter_enums()
         .enumerate()
-        .map(|(i, enum_info)| TiledEnumExport {
-            id: i + 1,
-            name: enum_info.name.to_string(),
-            values: enum_info.variants.iter().map(|s| s.to_string()).collect(),
-            values_as_flags: false,
+        .filter_map(|(i, enum_info)| {
+            // Only export simple enums here
+            // Complex enums are exported as class types in build_export_data
+            if enum_info.is_simple() {
+                Some(TiledEnumExport {
+                    id: i + 1,
+                    name: enum_info.name.to_string(),
+                    values: enum_info.variant_names().iter().map(ToString::to_string).collect(),
+                    values_as_flags: false,
+                })
+            } else {
+                None
+            }
         })
         .collect()
 }
@@ -180,6 +191,185 @@ fn convert_default_value(value: &TiledDefaultValue) -> TiledValueExport {
         TiledDefaultValue::Color { r, g, b, a } => {
             TiledValueExport::Color(format!("#{:02x}{:02x}{:02x}{:02x}", a, r, g, b))
         }
+    }
+}
+
+/// Export a complex enum as a Tiled class type with `:variant` discriminant field.
+///
+/// Complex enums (with struct/tuple variants) are exported as class types rather than
+/// simple enums. The class includes a `:variant` field (string type) that acts as the
+/// discriminant, plus the union of all fields from all variants.
+///
+/// # Arguments
+///
+/// * `enum_info` - The enum information from the registry
+/// * `id` - The ID to assign to this exported type
+/// * `registry` - The registry (for checking if referenced types are enums)
+///
+/// # Returns
+///
+/// A `TiledTypeExport` representing the complex enum as a class type
+fn export_complex_enum(
+    enum_info: &TiledEnumInfo,
+    id: usize,
+    registry: &TiledClassRegistry,
+) -> TiledTypeExport {
+    let variant_info = match &enum_info.kind {
+        TiledEnumKind::Complex { variant_info } => variant_info,
+        TiledEnumKind::Simple { .. } => {
+            panic!("export_complex_enum called on simple enum");
+        }
+    };
+
+    let mut members = Vec::new();
+    let mut field_types = std::collections::HashMap::new();
+
+    // Add :variant discriminant field first
+    let default_variant = enum_info.default_variant_name().unwrap_or("");
+    members.push(TiledMemberExport {
+        name: ":variant".to_string(),
+        tiled_type: "string".to_string(),
+        property_type: Some(format!("{}:::variant", enum_info.name)),
+        value: TiledValueExport::String(default_variant.to_string()),
+    });
+
+    // Collect union of all variant fields
+    for variant in variant_info.iter() {
+        if let Some(fields_info) = match &variant.kind {
+            TiledVariantKind::Unit => None,
+            TiledVariantKind::Struct { fields } | TiledVariantKind::Tuple { fields } => {
+                Some(*fields)
+            }
+        } {
+            for field in fields_info {
+                // Check for type conflicts
+                if let Some(existing_type) = field_types.get(field.name) {
+                    if !types_match(existing_type, &field.tiled_type) {
+                        warn!(
+                            "Field '{}' has conflicting types in enum '{}': {:?} vs {:?}. Using first type.",
+                            field.name, enum_info.name, existing_type, field.tiled_type
+                        );
+                        continue;
+                    }
+                } else {
+                    field_types.insert(field.name.to_string(), field.tiled_type.clone());
+
+                    // Export the field
+                    let (tiled_type, property_type, value) = match &field.tiled_type {
+                        TiledTypeKind::Bool => (
+                            "bool".to_string(),
+                            None,
+                            convert_default_value(&field.default_value),
+                        ),
+                        TiledTypeKind::Int => (
+                            "int".to_string(),
+                            None,
+                            convert_default_value(&field.default_value),
+                        ),
+                        TiledTypeKind::Float => (
+                            "float".to_string(),
+                            None,
+                            convert_default_value(&field.default_value),
+                        ),
+                        TiledTypeKind::String => (
+                            "string".to_string(),
+                            None,
+                            convert_default_value(&field.default_value),
+                        ),
+                        TiledTypeKind::Color => (
+                            "color".to_string(),
+                            None,
+                            convert_default_value(&field.default_value),
+                        ),
+                        TiledTypeKind::Class { property_type } => {
+                            // Check if this is an enum
+                            let is_enum = registry.get_enum(property_type).is_some();
+
+                            if is_enum {
+                                (
+                                    "string".to_string(),
+                                    Some(property_type.to_string()),
+                                    TiledValueExport::String(String::new()),
+                                )
+                            } else {
+                                (
+                                    "class".to_string(),
+                                    Some(property_type.to_string()),
+                                    TiledValueExport::ClassDefault,
+                                )
+                            }
+                        }
+                        TiledTypeKind::Enum {
+                            property_type, ..
+                        } => (
+                            "string".to_string(),
+                            Some(property_type.to_string()),
+                            TiledValueExport::String(String::new()),
+                        ),
+                    };
+
+                    members.push(TiledMemberExport {
+                        name: field.name.to_string(),
+                        tiled_type,
+                        property_type,
+                        value,
+                    });
+                }
+            }
+        }
+    }
+
+    TiledTypeExport {
+        id,
+        name: enum_info.name.to_string(),
+        members,
+    }
+}
+
+/// Check if two `TiledTypeKind` values represent the same type.
+fn types_match(a: &TiledTypeKind, b: &TiledTypeKind) -> bool {
+    match (a, b) {
+        (TiledTypeKind::Bool, TiledTypeKind::Bool)
+        | (TiledTypeKind::Int, TiledTypeKind::Int)
+        | (TiledTypeKind::Float, TiledTypeKind::Float)
+        | (TiledTypeKind::String, TiledTypeKind::String)
+        | (TiledTypeKind::Color, TiledTypeKind::Color) => true,
+        (TiledTypeKind::Class { property_type: a }, TiledTypeKind::Class { property_type: b }) => {
+            a == b
+        }
+        (
+            TiledTypeKind::Enum {
+                property_type: a, ..
+            },
+            TiledTypeKind::Enum {
+                property_type: b, ..
+            },
+        ) => a == b,
+        _ => false,
+    }
+}
+
+/// Generate a synthetic enum for the `:variant` discriminant field.
+///
+/// This creates an enum named `EnumName:::variant` with all the variant names
+/// as values. This allows Tiled to show a dropdown for selecting variants.
+///
+/// # Arguments
+///
+/// * `enum_info` - The enum information from the registry
+/// * `id` - The ID to assign to this exported enum
+///
+/// # Returns
+///
+/// A `TiledEnumExport` for the synthetic variant selector enum
+fn generate_variant_names_enum(enum_info: &TiledEnumInfo, id: usize) -> TiledEnumExport {
+    let variant_names = enum_info.variant_names();
+
+    TiledEnumExport {
+        id,
+        name: format!("{}:::variant", enum_info.name),
+        values: variant_names.iter().map(ToString::to_string).collect(),
+        values_as_flags: false,
     }
 }
 
@@ -441,8 +631,46 @@ pub fn export_all_types_with_reflection(
     }
 
     // Export enum types
-    let enum_exports = build_enum_export_data(tiled_registry);
-    all_exports.extend(enum_exports.into_iter().map(TiledTypeOrEnumExport::Enum));
+    let simple_enum_exports = build_enum_export_data(tiled_registry);
+    all_exports.extend(simple_enum_exports.into_iter().map(TiledTypeOrEnumExport::Enum));
+
+    // Export complex enums (as class types) and their synthetic variant enums
+    let mut next_id = all_exports.len() + 1;
+    for enum_info in tiled_registry.iter_enums() {
+        if enum_info.is_complex() {
+            // Export the complex enum as a class type
+            let complex_export = export_complex_enum(enum_info, next_id, tiled_registry);
+            all_exports.push(TiledTypeOrEnumExport::Type(complex_export));
+            next_id += 1;
+
+            // Export the synthetic :::variant enum
+            let variant_enum = generate_variant_names_enum(enum_info, next_id);
+            all_exports.push(TiledTypeOrEnumExport::Enum(variant_enum));
+            next_id += 1;
+
+            // Recursively discover referenced types in variant fields
+            if let Some(variant_info_slice) = enum_info.variant_info() {
+                for variant in variant_info_slice {
+                    if let Some(fields) = match &variant.kind {
+                        TiledVariantKind::Unit => None,
+                        TiledVariantKind::Struct { fields }
+                        | TiledVariantKind::Tuple { fields } => Some(*fields),
+                    } {
+                        for field in fields {
+                            if let TiledTypeKind::Class { property_type } = &field.tiled_type {
+                                discover_type_recursive(
+                                    property_type,
+                                    app,
+                                    &mut discovered_types,
+                                    &mut all_exports,
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     // Renumber IDs sequentially
     for (i, item) in all_exports.iter_mut().enumerate() {
@@ -598,7 +826,7 @@ fn build_reflected_export(
                     "bool" => TiledValueExport::Bool(false),
                     "int" => TiledValueExport::Int(0),
                     "float" => TiledValueExport::Float(0.0),
-                    "string" | _ => TiledValueExport::String(String::new()),
+                    _ => TiledValueExport::String(String::new()),
                 };
                 (tiled_type, None, default_value)
             } else {
@@ -643,7 +871,7 @@ fn map_primitive_to_tiled(type_path: &str) -> String {
         "bool" => "bool",
         "i32" | "i64" | "u32" | "u64" => "int",
         "f32" | "f64" => "float",
-        "alloc::string::String" | "&str" | _ => "string",
+        _ => "string",
     }
     .to_string()
 }

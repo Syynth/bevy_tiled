@@ -4,7 +4,7 @@
 //! registration and property deserialization.
 
 use proc_macro::TokenStream;
-use quote::quote;
+use quote::{format_ident, quote};
 use syn::{
     Data, DataEnum, DeriveInput, Fields, Lit, Meta, MetaNameValue, Type, Variant,
     parse_macro_input, punctuated::Punctuated, token::Comma,
@@ -71,12 +71,10 @@ fn derive_tiled_class_impl(input: DeriveInput) -> syn::Result<TokenStream> {
             // Handle enum
             handle_enum(type_name, &tiled_name, data, &input.attrs)
         }
-        _ => {
-            return Err(syn::Error::new_spanned(
-                type_name,
-                "TiledClass can only be derived for structs or enums",
-            ));
-        }
+        _ => Err(syn::Error::new_spanned(
+            type_name,
+            "TiledClass can only be derived for structs or enums",
+        )),
     }
 }
 
@@ -202,11 +200,9 @@ fn handle_enum(
             generate_unit_enum_impl(enum_name, tiled_name, &data.variants)
         }
         (EnumKind::Complex, _) | (_, EnumFormat::Struct) => {
-            // Complex enums or forced struct format - deferred to future PR
-            Err(syn::Error::new_spanned(
-                &data.variants,
-                "Complex enums (with variant data) are not yet supported. Use #[derive(TiledClass)] on structs for now. Complex enum support coming in future PR!",
-            ))
+            // Generate complex enum implementation (struct/tuple variants)
+            let analysis = analyze_enum_variants_detailed(&data.variants)?;
+            generate_complex_enum_impl(enum_name, tiled_name, &analysis)
         }
     }
 }
@@ -223,6 +219,45 @@ enum EnumFormat {
     Struct,
 }
 
+/// Information about a single variant analyzed from the enum
+#[derive(Clone)]
+struct VariantAnalysis {
+    /// Variant identifier
+    ident: syn::Ident,
+    /// Variant name as string
+    name: String,
+    /// Variant fields (None for unit variants)
+    fields: Option<VariantFields>,
+    /// Whether this variant has the #[default] attribute
+    is_default: bool,
+}
+
+/// Variant field information
+#[derive(Clone)]
+enum VariantFields {
+    /// Named fields (struct variant)
+    Named(Vec<NamedFieldInfo>),
+    /// Unnamed fields (tuple variant)
+    Unnamed(Vec<UnnamedFieldInfo>),
+}
+
+#[derive(Clone)]
+struct NamedFieldInfo {
+    ident: syn::Ident,
+    ty: Type,
+}
+
+#[derive(Clone)]
+struct UnnamedFieldInfo {
+    index: usize,
+    ty: Type,
+}
+
+/// Result of analyzing all variants in an enum
+struct EnumAnalysis {
+    variants: Vec<VariantAnalysis>,
+}
+
 /// Analyze enum variants to determine if they're all unit variants
 fn analyze_enum_variants(variants: &Punctuated<Variant, Comma>) -> syn::Result<EnumKind> {
     for variant in variants {
@@ -236,6 +271,58 @@ fn analyze_enum_variants(variants: &Punctuated<Variant, Comma>) -> syn::Result<E
     Ok(EnumKind::UnitOnly)
 }
 
+/// Analyze enum variants in detail, extracting field metadata and default markers
+fn analyze_enum_variants_detailed(variants: &Punctuated<Variant, Comma>) -> syn::Result<EnumAnalysis> {
+    let mut analyzed_variants = Vec::new();
+
+    for variant in variants {
+        let ident = variant.ident.clone();
+        let name = ident.to_string();
+
+        // Check for #[default] attribute
+        let is_default = variant.attrs.iter().any(|attr| attr.path().is_ident("default"));
+
+        // Analyze variant fields
+        let fields = match &variant.fields {
+            Fields::Unit => None,
+            Fields::Named(fields) => {
+                let named_fields: Vec<NamedFieldInfo> = fields
+                    .named
+                    .iter()
+                    .map(|f| NamedFieldInfo {
+                        ident: f.ident.clone().unwrap(),
+                        ty: f.ty.clone(),
+                    })
+                    .collect();
+                Some(VariantFields::Named(named_fields))
+            }
+            Fields::Unnamed(fields) => {
+                let unnamed_fields: Vec<UnnamedFieldInfo> = fields
+                    .unnamed
+                    .iter()
+                    .enumerate()
+                    .map(|(index, f)| UnnamedFieldInfo {
+                        index,
+                        ty: f.ty.clone(),
+                    })
+                    .collect();
+                Some(VariantFields::Unnamed(unnamed_fields))
+            }
+        };
+
+        analyzed_variants.push(VariantAnalysis {
+            ident,
+            name,
+            fields,
+            is_default,
+        });
+    }
+
+    Ok(EnumAnalysis {
+        variants: analyzed_variants,
+    })
+}
+
 /// Parse #[tiled(enum = "struct")] attribute
 fn parse_enum_format_attr(attrs: &[syn::Attribute]) -> syn::Result<EnumFormat> {
     for attr in attrs {
@@ -243,19 +330,14 @@ fn parse_enum_format_attr(attrs: &[syn::Attribute]) -> syn::Result<EnumFormat> {
             continue;
         }
 
-        if let Meta::List(list) = &attr.meta {
-            // Try to parse as key-value: enum = "struct"
-            if let Ok(nested) = syn::parse2::<MetaNameValue>(list.tokens.clone()) {
-                if nested.path.is_ident("enum") {
-                    if let syn::Expr::Lit(expr_lit) = &nested.value {
-                        if let Lit::Str(lit_str) = &expr_lit.lit {
-                            if lit_str.value() == "struct" {
-                                return Ok(EnumFormat::Struct);
-                            }
-                        }
-                    }
-                }
-            }
+        if let Meta::List(list) = &attr.meta
+            && let Ok(nested) = syn::parse2::<MetaNameValue>(list.tokens.clone())
+            && nested.path.is_ident("enum")
+            && let syn::Expr::Lit(expr_lit) = &nested.value
+            && let Lit::Str(lit_str) = &expr_lit.lit
+            && lit_str.value() == "struct"
+        {
+            return Ok(EnumFormat::Struct);
         }
     }
     Ok(EnumFormat::Auto)
@@ -328,12 +410,29 @@ fn generate_unit_enum_impl(
             bevy_tiled_core::properties::TiledEnumInfo {
                 type_id: ::std::any::TypeId::of::<#enum_name>(),
                 name: #tiled_name,
-                variants: #variants_array_name,
-                from_string: |s: &str| -> ::std::result::Result<::std::boxed::Box<dyn ::bevy::reflect::Reflect>, ::std::string::String> {
-                    match s {
-                        #(#variant_match_arms)*
+                kind: bevy_tiled_core::properties::TiledEnumKind::Simple {
+                    variants: #variants_array_name,
+                    from_string: |s: &str| -> ::std::result::Result<::std::boxed::Box<dyn ::bevy::reflect::Reflect>, ::std::string::String> {
+                        match s {
+                            #(#variant_match_arms)*
+                            _ => ::std::result::Result::Err(
+                                ::std::format!("Invalid variant '{}' for enum '{}'", s, #tiled_name)
+                            ),
+                        }
+                    },
+                },
+                from_property: |value: &::tiled::PropertyValue| -> ::std::result::Result<::std::boxed::Box<dyn ::bevy::reflect::Reflect>, ::std::string::String> {
+                    match value {
+                        ::tiled::PropertyValue::StringValue(s) => {
+                            match s.as_str() {
+                                #(#variant_match_arms)*
+                                _ => ::std::result::Result::Err(
+                                    ::std::format!("Invalid variant '{}' for enum '{}'", s, #tiled_name)
+                                ),
+                            }
+                        }
                         _ => ::std::result::Result::Err(
-                            ::std::format!("Invalid variant '{}' for enum '{}'", s, #tiled_name)
+                            ::std::format!("Expected StringValue for simple enum '{}'", #tiled_name)
                         ),
                     }
                 },
@@ -342,6 +441,394 @@ fn generate_unit_enum_impl(
     };
 
     Ok(expanded.into())
+}
+
+/// Generate implementation for complex enum (with struct/tuple variants)
+fn generate_complex_enum_impl(
+    enum_name: &syn::Ident,
+    tiled_name: &str,
+    analysis: &EnumAnalysis,
+) -> syn::Result<TokenStream> {
+    // Generate field metadata arrays for each variant
+    let variant_metadata_arrays = generate_variant_metadata_arrays(enum_name, &analysis.variants)?;
+
+    // Generate FromTiledProperty implementation
+    let from_property_impl = generate_complex_from_property_impl(enum_name, tiled_name, &analysis.variants)?;
+
+    // Generate TiledVariantInfo array
+    let variant_info_array = generate_variant_info_array(enum_name, &analysis.variants)?;
+
+    // Generate inventory submission
+    let inventory_submission = quote! {
+        ::inventory::submit! {
+            bevy_tiled_core::properties::TiledEnumInfo {
+                type_id: ::std::any::TypeId::of::<#enum_name>(),
+                name: #tiled_name,
+                kind: bevy_tiled_core::properties::TiledEnumKind::Complex {
+                    variant_info: #variant_info_array,
+                },
+                from_property: |value: &::tiled::PropertyValue| -> ::std::result::Result<::std::boxed::Box<dyn ::bevy::reflect::Reflect>, ::std::string::String> {
+                    #from_property_impl
+                },
+            }
+        }
+    };
+
+    // Generate FromTiledProperty trait implementation
+    let from_tiled_property_match_arms: Vec<_> = analysis
+        .variants
+        .iter()
+        .map(|variant| {
+            let variant_ident = &variant.ident;
+            let variant_name = &variant.name;
+
+            match &variant.fields {
+                None => {
+                    // Unit variant
+                    quote! {
+                        #variant_name => ::std::option::Option::Some(Self::#variant_ident),
+                    }
+                }
+                Some(VariantFields::Named(named_fields)) => {
+                    // Struct variant
+                    let field_extractions: Vec<_> = named_fields
+                        .iter()
+                        .map(|field| {
+                            let field_ident = &field.ident;
+                            let field_name = field_ident.to_string();
+                            let field_type = &field.ty;
+
+                            quote! {
+                                let #field_ident: #field_type = properties
+                                    .get(#field_name)
+                                    .and_then(|v| <#field_type as bevy_tiled_core::properties::FromTiledProperty>::from_property(v))?;
+                            }
+                        })
+                        .collect();
+
+                    let field_names: Vec<_> = named_fields.iter().map(|f| &f.ident).collect();
+
+                    quote! {
+                        #variant_name => {
+                            #(#field_extractions)*
+                            ::std::option::Option::Some(Self::#variant_ident {
+                                #(#field_names),*
+                            })
+                        },
+                    }
+                }
+                Some(VariantFields::Unnamed(unnamed_fields)) => {
+                    // Tuple variant
+                    let field_extractions: Vec<_> = unnamed_fields
+                        .iter()
+                        .map(|field| {
+                            let index = field.index;
+                            let field_name = index.to_string();
+                            let field_type = &field.ty;
+                            let field_var = format_ident!("field_{}", index);
+
+                            quote! {
+                                let #field_var: #field_type = properties
+                                    .get(#field_name)
+                                    .and_then(|v| <#field_type as bevy_tiled_core::properties::FromTiledProperty>::from_property(v))?;
+                            }
+                        })
+                        .collect();
+
+                    let field_vars: Vec<_> = (0..unnamed_fields.len())
+                        .map(|i| format_ident!("field_{}", i))
+                        .collect();
+
+                    quote! {
+                        #variant_name => {
+                            #(#field_extractions)*
+                            ::std::option::Option::Some(Self::#variant_ident(
+                                #(#field_vars),*
+                            ))
+                        },
+                    }
+                }
+            }
+        })
+        .collect();
+
+    let expanded = quote! {
+        #variant_metadata_arrays
+
+        // Implement FromTiledProperty for the enum
+        impl bevy_tiled_core::properties::FromTiledProperty for #enum_name {
+            fn from_property(value: &::tiled::PropertyValue) -> ::std::option::Option<Self> {
+                match value {
+                    ::tiled::PropertyValue::ClassValue { properties, .. } => {
+                        // Extract :variant discriminant field
+                        let variant_name = properties
+                            .get(":variant")
+                            .and_then(|v| match v {
+                                ::tiled::PropertyValue::StringValue(s) => ::std::option::Option::Some(s.as_str()),
+                                _ => ::std::option::Option::None,
+                            })?;
+
+                        // Match on variant name and construct
+                        match variant_name {
+                            #(#from_tiled_property_match_arms)*
+                            _ => ::std::option::Option::None,
+                        }
+                    }
+                    _ => ::std::option::Option::None,
+                }
+            }
+        }
+
+        #inventory_submission
+    };
+
+    Ok(expanded.into())
+}
+
+/// Generate static field metadata arrays for all variants
+fn generate_variant_metadata_arrays(
+    enum_name: &syn::Ident,
+    variants: &[VariantAnalysis],
+) -> syn::Result<proc_macro2::TokenStream> {
+    let mut arrays = Vec::new();
+
+    for variant in variants {
+        if let Some(fields) = &variant.fields {
+            let array_name = format_ident!(
+                "__TILED_VARIANT_{}_{}",
+                enum_name.to_string().to_uppercase(),
+                variant.name.to_uppercase()
+            );
+
+            let field_entries = match fields {
+                VariantFields::Named(named_fields) => {
+                    named_fields.iter().map(|field| {
+                        let field_name = field.ident.to_string();
+                        let tiled_type = map_rust_type_to_tiled(&field.ty);
+                        let default_value = generate_type_default(&field.ty)?;
+
+                        Ok(quote! {
+                            bevy_tiled_core::properties::TiledFieldInfo {
+                                name: #field_name,
+                                tiled_type: #tiled_type,
+                                default_value: #default_value,
+                            }
+                        })
+                    }).collect::<syn::Result<Vec<_>>>()?
+                }
+                VariantFields::Unnamed(unnamed_fields) => {
+                    unnamed_fields.iter().map(|field| {
+                        let field_name = field.index.to_string();
+                        let tiled_type = map_rust_type_to_tiled(&field.ty);
+                        let default_value = generate_type_default(&field.ty)?;
+
+                        Ok(quote! {
+                            bevy_tiled_core::properties::TiledFieldInfo {
+                                name: #field_name,
+                                tiled_type: #tiled_type,
+                                default_value: #default_value,
+                            }
+                        })
+                    }).collect::<syn::Result<Vec<_>>>()?
+                }
+            };
+
+            arrays.push(quote! {
+                #[doc(hidden)]
+                static #array_name: &[bevy_tiled_core::properties::TiledFieldInfo] = &[
+                    #(#field_entries),*
+                ];
+            });
+        }
+    }
+
+    Ok(quote! {
+        #(#arrays)*
+    })
+}
+
+/// Generate `TiledVariantInfo` static array
+fn generate_variant_info_array(
+    enum_name: &syn::Ident,
+    variants: &[VariantAnalysis],
+) -> syn::Result<proc_macro2::TokenStream> {
+    let _array_name = format_ident!("__TILED_ENUM_VARIANTS_{}", enum_name.to_string().to_uppercase());
+
+    let variant_entries: Vec<_> = variants
+        .iter()
+        .map(|variant| {
+            let variant_name = &variant.name;
+            let is_default = variant.is_default;
+
+            let variant_kind = match &variant.fields {
+                None => quote! {
+                    bevy_tiled_core::properties::TiledVariantKind::Unit
+                },
+                Some(VariantFields::Named(_)) => {
+                    let fields_array_name = format_ident!(
+                        "__TILED_VARIANT_{}_{}",
+                        enum_name.to_string().to_uppercase(),
+                        variant.name.to_uppercase()
+                    );
+                    quote! {
+                        bevy_tiled_core::properties::TiledVariantKind::Struct {
+                            fields: #fields_array_name
+                        }
+                    }
+                }
+                Some(VariantFields::Unnamed(_)) => {
+                    let fields_array_name = format_ident!(
+                        "__TILED_VARIANT_{}_{}",
+                        enum_name.to_string().to_uppercase(),
+                        variant.name.to_uppercase()
+                    );
+                    quote! {
+                        bevy_tiled_core::properties::TiledVariantKind::Tuple {
+                            fields: #fields_array_name
+                        }
+                    }
+                }
+            };
+
+            quote! {
+                bevy_tiled_core::properties::TiledVariantInfo {
+                    name: #variant_name,
+                    kind: #variant_kind,
+                    is_default: #is_default,
+                }
+            }
+        })
+        .collect();
+
+    Ok(quote! { &[#(#variant_entries),*] })
+}
+
+/// Generate `FromTiledProperty` implementation for complex enum
+fn generate_complex_from_property_impl(
+    enum_name: &syn::Ident,
+    tiled_name: &str,
+    variants: &[VariantAnalysis],
+) -> syn::Result<proc_macro2::TokenStream> {
+    // Generate match arms for each variant
+    let variant_match_arms: Vec<_> = variants
+        .iter()
+        .map(|variant| {
+            let variant_ident = &variant.ident;
+            let variant_name = &variant.name;
+
+            match &variant.fields {
+                None => {
+                    // Unit variant
+                    Ok(quote! {
+                        #variant_name => ::std::result::Result::Ok(
+                            ::std::boxed::Box::new(#enum_name::#variant_ident)
+                        ),
+                    })
+                }
+                Some(VariantFields::Named(named_fields)) => {
+                    // Struct variant
+                    let field_extractions: Vec<_> = named_fields
+                        .iter()
+                        .map(|field| {
+                            let field_ident = &field.ident;
+                            let field_name = field_ident.to_string();
+                            let field_type = &field.ty;
+
+                            quote! {
+                                let #field_ident: #field_type = properties
+                                    .get(#field_name)
+                                    .and_then(|v| <#field_type as bevy_tiled_core::properties::FromTiledProperty>::from_property(v))
+                                    .ok_or_else(|| ::std::format!(
+                                        "Missing or invalid field '{}' for variant '{}'",
+                                        #field_name,
+                                        #variant_name
+                                    ))?;
+                            }
+                        })
+                        .collect();
+
+                    let field_names: Vec<_> = named_fields.iter().map(|f| &f.ident).collect();
+
+                    Ok(quote! {
+                        #variant_name => {
+                            #(#field_extractions)*
+                            ::std::result::Result::Ok(::std::boxed::Box::new(#enum_name::#variant_ident {
+                                #(#field_names),*
+                            }))
+                        },
+                    })
+                }
+                Some(VariantFields::Unnamed(unnamed_fields)) => {
+                    // Tuple variant
+                    let field_extractions: Vec<_> = unnamed_fields
+                        .iter()
+                        .map(|field| {
+                            let index = field.index;
+                            let field_name = index.to_string();
+                            let field_type = &field.ty;
+                            let field_var = format_ident!("field_{}", index);
+
+                            quote! {
+                                let #field_var: #field_type = properties
+                                    .get(#field_name)
+                                    .and_then(|v| <#field_type as bevy_tiled_core::properties::FromTiledProperty>::from_property(v))
+                                    .ok_or_else(|| ::std::format!(
+                                        "Missing or invalid field '{}' for variant '{}'",
+                                        #field_name,
+                                        #variant_name
+                                    ))?;
+                            }
+                        })
+                        .collect();
+
+                    let field_vars: Vec<_> = (0..unnamed_fields.len())
+                        .map(|i| format_ident!("field_{}", i))
+                        .collect();
+
+                    Ok(quote! {
+                        #variant_name => {
+                            #(#field_extractions)*
+                            ::std::result::Result::Ok(::std::boxed::Box::new(#enum_name::#variant_ident(
+                                #(#field_vars),*
+                            )))
+                        },
+                    })
+                }
+            }
+        })
+        .collect::<syn::Result<Vec<_>>>()?;
+
+    Ok(quote! {
+        match value {
+            ::tiled::PropertyValue::ClassValue { properties, .. } => {
+                // Extract :variant discriminant field
+                let variant_name = properties
+                    .get(":variant")
+                    .and_then(|v| match v {
+                        ::tiled::PropertyValue::StringValue(s) => ::std::option::Option::Some(s.as_str()),
+                        _ => ::std::option::Option::None,
+                    })
+                    .ok_or_else(|| ::std::string::String::from(
+                        "Missing or invalid ':variant' field in ClassValue"
+                    ))?;
+
+                // Match on variant name and construct
+                match variant_name {
+                    #(#variant_match_arms)*
+                    _ => ::std::result::Result::Err(::std::format!(
+                        "Unknown variant '{}' for enum '{}'",
+                        variant_name,
+                        #tiled_name
+                    )),
+                }
+            }
+            _ => ::std::result::Result::Err(::std::format!(
+                "Expected ClassValue for complex enum '{}', got {:?}",
+                #tiled_name,
+                value
+            )),
+        }
+    })
 }
 
 /// Parse #[tiled(name = "...")] attribute from struct

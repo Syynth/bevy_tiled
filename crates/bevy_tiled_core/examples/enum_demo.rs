@@ -1,10 +1,10 @@
-//! Demonstrates TiledClass enum support with native Tiled enum export.
+//! Demonstrates `TiledClass` enum support with native Tiled enum export.
 //!
 //! This example shows:
 //! 1. Defining simple unit-variant enums with `#[derive(TiledClass)]`
-//! 2. Using enums as fields in TiledClass structs
+//! 2. Using enums as fields in `TiledClass` structs
 //! 3. Automatic export to Tiled's native enum format (dropdown in editor)
-//! 4. Zero-boilerplate FromTiledProperty implementation
+//! 4. Zero-boilerplate `FromTiledProperty` implementation
 
 use bevy::prelude::*;
 use bevy_tiled_core::plugin::BevyTiledCorePlugin;
@@ -16,6 +16,7 @@ fn main() {
     // Add minimal plugins
     app.add_plugins(MinimalPlugins);
     app.add_plugins(AssetPlugin::default());
+    app.add_plugins(bevy::log::LogPlugin::default());
 
     // Add BevyTiledCorePlugin which registers the TiledClassRegistry
     app.add_plugins(BevyTiledCorePlugin::default());
@@ -27,8 +28,8 @@ fn main() {
     // Export types directly
     export_types(&app);
 
-    println!("✅ Enum demo completed!");
-    println!("Check the generated custom-types.json file");
+    info!("✅ Enum demo completed!");
+    info!("Check the generated custom-types.json file");
 }
 
 /// Example enum: Cardinal directions
@@ -58,12 +59,12 @@ pub enum EnemyType {
 
 /// Example struct using enums as fields
 ///
-/// This demonstrates how enums are used in TiledClass structs.
+/// This demonstrates how enums are used in `TiledClass` structs.
 /// The enum fields will be exported with propertyType references.
 #[derive(Component, Reflect, TiledClass, Default)]
 #[tiled(name = "demo::Enemy")]
 struct Enemy {
-    /// Enemy type (uses EnemyType enum)
+    /// Enemy type (uses `EnemyType` enum)
     #[tiled(default = EnemyType::Goblin)]
     enemy_type: EnemyType,
     /// Facing direction (uses Direction enum)
@@ -89,7 +90,7 @@ struct SpawnPoint {
 }
 
 fn export_types(app: &App) {
-    println!("🔧 Exporting type definitions...");
+    info!("🔧 Exporting type definitions...");
 
     // Export using the hybrid approach (TiledClass + Reflection)
     match bevy_tiled_core::properties::export::export_all_types_with_reflection(
@@ -97,29 +98,29 @@ fn export_types(app: &App) {
         "custom-types.json",
     ) {
         Ok(()) => {
-            println!("✅ Successfully exported types to custom-types.json");
-            println!("\n📝 Exported types:");
-            println!("  - demo::Direction (enum with 4 variants)");
-            println!("  - demo::EnemyType (enum with 4 variants)");
-            println!("  - demo::Enemy (struct with enum fields)");
-            println!("  - demo::SpawnPoint (struct with enum field)");
-            println!("  - glam::Vec2 (auto-discovered via reflection)");
+            info!("✅ Successfully exported types to custom-types.json");
+            info!("\n📝 Exported types:");
+            info!("  - demo::Direction (enum with 4 variants)");
+            info!("  - demo::EnemyType (enum with 4 variants)");
+            info!("  - demo::Enemy (struct with enum fields)");
+            info!("  - demo::SpawnPoint (struct with enum field)");
+            info!("  - glam::Vec2 (auto-discovered via reflection)");
 
-            println!("\n💡 Enum benefits:");
-            println!("  ✨ Zero boilerplate - no manual FromTiledProperty impl needed");
-            println!("  ✨ Native Tiled enum type with dropdown UI");
-            println!("  ✨ Type-safe - prevents typos in variant names");
-            println!("  ✨ Auto-discovered when used as struct fields");
+            info!("\n💡 Enum benefits:");
+            info!("  ✨ Zero boilerplate - no manual FromTiledProperty impl needed");
+            info!("  ✨ Native Tiled enum type with dropdown UI");
+            info!("  ✨ Type-safe - prevents typos in variant names");
+            info!("  ✨ Auto-discovered when used as struct fields");
 
-            println!("\n💡 To use in Tiled:");
-            println!("  1. Open Tiled editor");
-            println!("  2. View → Custom Types → Import Custom Types");
-            println!("  3. Select custom-types.json");
-            println!("  4. Create an object with custom class 'demo::Enemy'");
-            println!("  5. Notice 'enemy_type' and 'facing' fields have DROPDOWN menus!");
+            info!("\n💡 To use in Tiled:");
+            info!("  1. Open Tiled editor");
+            info!("  2. View → Custom Types → Import Custom Types");
+            info!("  3. Select custom-types.json");
+            info!("  4. Create an object with custom class 'demo::Enemy'");
+            info!("  5. Notice 'enemy_type' and 'facing' fields have DROPDOWN menus!");
         }
         Err(e) => {
-            eprintln!("❌ Failed to export types: {}", e);
+            error!("❌ Failed to export types: {}", e);
         }
     }
 }
