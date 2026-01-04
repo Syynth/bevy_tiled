@@ -1533,7 +1533,19 @@ dependencies = [
 ]
 
 [[package]]
-name = "bevy_tiled_assets"
+name = "bevy_tiledmap"
+version = "0.0.1"
+dependencies = [
+ "bevy",
+ "bevy_tiledmap_assets",
+ "bevy_tiledmap_avian",
+ "bevy_tiledmap_core",
+ "bevy_tiledmap_native",
+ "bevy_tiledmap_tilemap",
+]
+
+[[package]]
+name = "bevy_tiledmap_assets"
 version = "0.0.1"
 dependencies = [
  "bevy",
@@ -1542,32 +1554,32 @@ dependencies = [
 ]
 
 [[package]]
-name = "bevy_tiled_avian"
+name = "bevy_tiledmap_avian"
 version = "0.1.0"
 dependencies = [
  "avian2d",
  "bevy",
- "bevy_tiled_assets",
- "bevy_tiled_core",
- "bevy_tiled_macros",
+ "bevy_tiledmap_assets",
+ "bevy_tiledmap_core",
+ "bevy_tiledmap_macros",
  "inventory",
  "tiled",
 ]
 
 [[package]]
-name = "bevy_tiled_core"
+name = "bevy_tiledmap_core"
 version = "0.1.0"
 dependencies = [
  "bevy",
  "bevy-inspector-egui",
- "bevy_tiled_assets",
- "bevy_tiled_macros",
+ "bevy_tiledmap_assets",
+ "bevy_tiledmap_macros",
  "inventory",
  "tiled",
 ]
 
 [[package]]
-name = "bevy_tiled_macros"
+name = "bevy_tiledmap_macros"
 version = "0.1.0"
 dependencies = [
  "proc-macro2",
@@ -1576,21 +1588,21 @@ dependencies = [
 ]
 
 [[package]]
-name = "bevy_tiled_native"
+name = "bevy_tiledmap_native"
 version = "0.1.0"
 dependencies = [
  "bevy",
 ]
 
 [[package]]
-name = "bevy_tiled_tilemap"
+name = "bevy_tiledmap_tilemap"
 version = "0.1.0"
 dependencies = [
  "bevy",
  "bevy-inspector-egui",
  "bevy_ecs_tilemap",
- "bevy_tiled_assets",
- "bevy_tiled_core",
+ "bevy_tiledmap_assets",
+ "bevy_tiledmap_core",
  "tiled",
 ]
 

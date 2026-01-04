@@ -1,0 +1,75 @@
+//! Main reactive spawning system.
+
+use bevy::asset::RecursiveDependencyLoadState;
+use bevy::prelude::*;
+use bevy_tiledmap_assets::prelude::{TiledMapAsset, TiledTilesetAsset};
+
+use crate::components::TiledMap;
+use crate::spawn::spawn_map;
+use crate::systems::SpawnContext;
+
+/// Marker component to trigger map respawning.
+///
+/// Add this component to force the map to be respawned even if it hasn't changed.
+#[derive(Component)]
+pub struct RespawnTiledMap;
+
+/// Reactive system that detects when `TiledMapAsset` loading completes and spawns entities.
+///
+/// Runs in `PreUpdate` before user systems.
+///
+/// # Triggers
+///
+/// - `Changed<TiledMap>` - When map handle is added or changed
+/// - `With<RespawnTiledMap>` - When manual respawn is requested
+///
+/// # Use Cases
+///
+/// 1. **Initial spawn**: User creates entity with `TiledMap` component
+/// 2. **Hot reload**: Asset changes, system detects and respawns
+/// 3. **Dynamic loading**: Runtime map loading for procedural levels
+pub fn process_loaded_maps(
+    asset_server: Res<AssetServer>,
+    map_assets: Res<Assets<TiledMapAsset>>,
+    tileset_assets: Res<Assets<TiledTilesetAsset>>,
+    template_assets: Res<Assets<bevy_tiledmap_assets::prelude::TiledTemplateAsset>>,
+    registry: Res<crate::properties::TiledClassRegistry>,
+    type_registry: Res<AppTypeRegistry>,
+    mut commands: Commands,
+    mut map_query: Query<(Entity, &TiledMap), Or<(Without<crate::components::LayersInMap>, With<RespawnTiledMap>)>>,
+) {
+    for (map_entity, tiled_map) in map_query.iter_mut() {
+        info!("Processing map entity {:?}", map_entity);
+
+        // Check if all dependencies have finished loading
+        let load_state = asset_server.get_recursive_dependency_load_state(&tiled_map.handle);
+        info!("Load state for map entity {:?}: {:?}", map_entity, load_state);
+
+        let Some(RecursiveDependencyLoadState::Loaded) = load_state
+        else {
+            continue;
+        };
+
+        info!("Map dependencies fully loaded, getting map asset");
+
+        // Get the map asset
+        let Some(map_asset) = map_assets.get(&tiled_map.handle) else {
+            // Asset handle loaded but asset not found
+            warn!("Map asset loaded but not found in Assets resource!");
+            continue;
+        };
+
+        info!("Map asset found, spawning map hierarchy");
+
+        // Create spawn context with asset references
+        let context = SpawnContext::new(map_asset, &tileset_assets, &template_assets, &registry);
+
+        // Spawn the map hierarchy
+        spawn_map(&mut commands, map_entity, &context, &type_registry);
+
+        info!("Map hierarchy spawned successfully");
+
+        // Remove RespawnTiledMap marker if present
+        commands.entity(map_entity).remove::<RespawnTiledMap>();
+    }
+}

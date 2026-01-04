@@ -1,0 +1,13 @@
+[package]
+name = "bevy_tiledmap_native"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "Bevy native tilemap rendering for bevy_tiled (planned for future release)"
+repository = "https://github.com/adrien-bon/bevy_tiled"
+
+[dependencies]
+bevy = { version = "0.17", default-features = false }
+
+[lints]
+workspace = true

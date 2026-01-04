@@ -1,11 +1,12 @@
 [workspace]
 members = [
-    "crates/bevy_tiled_assets",
-    "crates/bevy_tiled_avian",
-    "crates/bevy_tiled_core",
-    "crates/bevy_tiled_macros",
-    "crates/bevy_tiled_native",
-    "crates/bevy_tiled_tilemap",
+    "crates/bevy_tiledmap",        # Root meta-crate
+    "crates/bevy_tiledmap_assets",
+    "crates/bevy_tiledmap_avian",
+    "crates/bevy_tiledmap_core",
+    "crates/bevy_tiledmap_macros",
+    "crates/bevy_tiledmap_native",
+    "crates/bevy_tiledmap_tilemap",
 ]
 resolver = "3"
 
