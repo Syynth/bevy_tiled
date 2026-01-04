@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<map version="1.10" tiledversion="1.11.1" orientation="orthogonal" renderorder="right-down" width="20" height="15" tilewidth="32" tileheight="32" infinite="0" nextlayerid="3" nextobjectid="7">
+ <objectgroup id="2" name="Physics Objects">
+  <object id="1" name="Platform1" x="96" y="352" width="256" height="32">
+   <properties>
+    <property name="description" value="Static platform"/>
+    <property name="physics_settings" type="class" propertytype="avian::PhysicsSettings">
+     <properties>
+      <property name="body_type" propertytype="avian::BodyType" value="Static"/>
+      <property name="friction" type="float" value="0.8"/>
+      <property name="restitution" type="float" value="0"/>
+     </properties>
+    </property>
+   </properties>
+  </object>
+  <object id="2" name="Platform2" x="416" y="288" width="192" height="32">
+   <properties>
+    <property name="description" value="Bouncy platform"/>
+    <property name="physics_settings" type="class" propertytype="avian::PhysicsSettings">
+     <properties>
+      <property name="body_type" propertytype="avian::BodyType" value="Static"/>
+      <property name="friction" type="float" value="0.3"/>
+      <property name="restitution" type="float" value="0.5"/>
+     </properties>
+    </property>
+   </properties>
+  </object>
+  <object id="3" name="Obstacle" x="240" y="192">
+   <ellipse/>
+   <properties>
+    <property name="description" value="Dynamic obstacle"/>
+    <property name="physics_settings" type="class" propertytype="avian::PhysicsSettings">
+     <properties>
+      <property name="body_type" propertytype="avian::BodyType" value="Dynamic"/>
+      <property name="friction" type="float" value="0.5"/>
+      <property name="restitution" type="float" value="0.3"/>
+      <property name="density" type="float" value="2"/>
+     </properties>
+    </property>
+   </properties>
+  </object>
+  <object id="4" name="Ramp" x="96" y="192">
+   <polygon points="0,0 128,0 128,96"/>
+   <properties>
+    <property name="description" value="Static ramp"/>
+    <property name="physics_settings" type="class" propertytype="avian::PhysicsSettings">
+     <properties>
+      <property name="body_type" propertytype="avian::BodyType" value="Static"/>
+      <property name="friction" type="float" value="0.6"/>
+     </properties>
+    </property>
+   </properties>
+  </object>
+  <object id="5" name="Wall" x="544" y="96">
+   <polyline points="0,0 0,192 32,192"/>
+   <properties>
+    <property name="description" value="Static wall"/>
+    <property name="physics_settings" type="class" propertytype="avian::PhysicsSettings">
+     <properties>
+      <property name="body_type" propertytype="avian::BodyType" value="Static"/>
+      <property name="friction" type="float" value="0.5"/>
+     </properties>
+    </property>
+   </properties>
+  </object>
+  <object id="6" name="SpawnPoint" x="320" y="128">
+   <point/>
+   <properties>
+    <property name="description" value="Player spawn (sensor)"/>
+    <property name="physics_settings" type="class" propertytype="avian::PhysicsSettings">
+     <properties>
+      <property name="body_type" propertytype="avian::BodyType" value="Static"/>
+      <property name="is_sensor" type="bool" value="true"/>
+     </properties>
+    </property>
+   </properties>
+  </object>
+ </objectgroup>
+</map>

@@ -1,0 +1,25 @@
+[package]
+name = "bevy_tiled_avian"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "Avian2D physics integration for bevy_tiled - automatic collider generation from Tiled maps"
+repository = "https://github.com/adrien-bon/bevy_tiled"
+
+[dependencies]
+bevy = { version = "0.17", default-features = false, features = ["bevy_asset", "bevy_sprite", "bevy_render"] }
+bevy_tiled_core = { path = "../bevy_tiled_core" }
+bevy_tiled_assets = { path = "../bevy_tiled_assets" }
+bevy_tiled_macros = { path = "../bevy_tiled_macros" }
+avian2d = "0.4"
+tiled = "0.15"
+inventory = "0.3"
+
+[dev-dependencies]
+bevy = { version = "0.17", default-features = true }
+
+[features]
+default = []
+
+[lints]
+workspace = true

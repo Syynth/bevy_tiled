@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/bevy_tiled_assets",
+    "crates/bevy_tiled_avian",
     "crates/bevy_tiled_core",
     "crates/bevy_tiled_macros",
     "crates/bevy_tiled_native",
