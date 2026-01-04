@@ -1,0 +1,36 @@
+//! Map spawning logic.
+
+use bevy::prelude::*;
+
+use crate::components::LayersInMap;
+use crate::spawn::spawn_layer;
+use crate::systems::SpawnContext;
+
+/// Spawn the entity hierarchy for a map.
+///
+/// Creates layer entities with appropriate components and data:
+/// - Tile layers: `TileLayerData` with pre-processed tiles
+/// - Object layers: Individual object entities as children
+/// - Image layers: `ImageLayerData`
+/// - Group layers: Recursive layer hierarchy
+///
+/// # arguments
+///
+/// * `commands` - Bevy commands for entity spawning
+/// * `map_entity` - The entity with the `TiledMap` component
+/// * `context` - Spawn context with asset data access
+pub fn spawn_map(commands: &mut Commands, map_entity: Entity, context: &SpawnContext) {
+    let mut layer_entities = Vec::new();
+
+    // Spawn each top-level layer (spawn_layer handles recursion for groups)
+    for layer in context.map_asset.map.layers() {
+        let layer_entity = spawn_layer(commands, &layer, map_entity, context);
+        layer_entities.push(layer_entity);
+    }
+
+    // Add LayersInMap component and set up parent-child hierarchy
+    commands
+        .entity(map_entity)
+        .insert(LayersInMap(layer_entities.clone()))
+        .add_children(&layer_entities);
+}
