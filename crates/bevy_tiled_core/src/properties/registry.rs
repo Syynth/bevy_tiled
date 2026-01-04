@@ -27,8 +27,15 @@ pub enum TiledTypeKind {
     Color,
     /// Class type (custom type with properties)
     ///
-    /// The `property_type` field contains the full type path (e.g., "glam::Vec2", "game::Door")
+    /// The `property_type` field contains the full type path (e.g., "`glam::Vec2`", "`game::Door`")
     Class { property_type: &'static str },
+    /// Enum type (unit-variant enums for dropdowns)
+    ///
+    /// The `property_type` field contains the full type path, and `variants` contains all variant names
+    Enum {
+        property_type: &'static str,
+        variants: &'static [&'static str],
+    },
 }
 
 /// Default value for a Tiled class field.
@@ -84,6 +91,32 @@ pub struct TiledClassInfo {
 // Collect all TiledClassInfo submissions at compile time
 inventory::collect!(TiledClassInfo);
 
+/// Information about a registered `TiledClass` enum type.
+///
+/// This struct is submitted via `inventory::submit!` by the `TiledClass` derive macro
+/// for unit-variant enums. Each registered enum provides:
+/// - Its `TypeId` for reflection lookups
+/// - A display name matching the Tiled custom enum name
+/// - List of variant names for JSON export and deserialization
+/// - A deserialization function to convert strings to enum variants
+pub struct TiledEnumInfo {
+    /// The `TypeId` of the registered enum
+    pub type_id: TypeId,
+
+    /// The name used in Tiled custom properties (e.g., `"game::Direction"`)
+    pub name: &'static str,
+
+    /// List of variant names (e.g., `["North", "South", "East", "West"]`)
+    pub variants: &'static [&'static str],
+
+    /// Function to deserialize a string variant name into this enum type
+    /// Returns a boxed reflected enum or an error message
+    pub from_string: fn(&str) -> Result<Box<dyn Reflect>, String>,
+}
+
+// Collect all TiledEnumInfo submissions at compile time
+inventory::collect!(TiledEnumInfo);
+
 /// Registry of all types with `#[derive(TiledClass)]`.
 ///
 /// This resource is built at plugin startup by iterating all compile-time
@@ -101,6 +134,7 @@ inventory::collect!(TiledClassInfo);
 #[derive(Resource)]
 pub struct TiledClassRegistry {
     by_name: HashMap<String, &'static TiledClassInfo>,
+    enums_by_name: HashMap<String, &'static TiledEnumInfo>,
 }
 
 impl TiledClassRegistry {
@@ -109,17 +143,26 @@ impl TiledClassRegistry {
     /// This should be called once during plugin initialization.
     pub fn build() -> Self {
         let mut by_name = HashMap::new();
+        let mut enums_by_name = HashMap::new();
 
         for info in inventory::iter::<TiledClassInfo> {
             by_name.insert(info.name.to_string(), info);
         }
 
+        for info in inventory::iter::<TiledEnumInfo> {
+            enums_by_name.insert(info.name.to_string(), info);
+        }
+
         info!(
-            "TiledClassRegistry built with {} registered types",
-            by_name.len()
+            "TiledClassRegistry built with {} registered types and {} enums",
+            by_name.len(),
+            enums_by_name.len()
         );
 
-        Self { by_name }
+        Self {
+            by_name,
+            enums_by_name,
+        }
     }
 
     /// Get type information by Tiled class name.
@@ -153,5 +196,33 @@ impl TiledClassRegistry {
     /// Check if the registry is empty.
     pub fn is_empty(&self) -> bool {
         self.by_name.is_empty()
+    }
+
+    /// Get enum information by Tiled enum name.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The enum name as it appears in Tiled properties (e.g., `"game::Direction"`)
+    ///
+    /// # Returns
+    ///
+    /// `Some(&TiledEnumInfo)` if an enum with this name was registered, `None` otherwise.
+    pub fn get_enum(&self, name: &str) -> Option<&'static TiledEnumInfo> {
+        self.enums_by_name.get(name).copied()
+    }
+
+    /// Iterate all registered enum names.
+    pub fn enum_names(&self) -> impl Iterator<Item = &str> {
+        self.enums_by_name.keys().map(String::as_str)
+    }
+
+    /// Iterate all registered enum info.
+    pub fn iter_enums(&self) -> impl Iterator<Item = &'static TiledEnumInfo> + '_ {
+        self.enums_by_name.values().copied()
+    }
+
+    /// Get the number of registered enums.
+    pub fn enum_len(&self) -> usize {
+        self.enums_by_name.len()
     }
 }

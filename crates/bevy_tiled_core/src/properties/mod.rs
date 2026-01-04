@@ -12,11 +12,15 @@ pub mod deserialize;
 pub mod export;
 pub mod registry;
 
-pub use deserialize::FromTiledProperty;
+pub use deserialize::{deserialize_enum_from_string, DeserializeError, FromTiledProperty};
 pub use export::{
-    build_export_data, export_types_to_json, TiledMemberExport, TiledTypeExport, TiledValueExport,
+    build_enum_export_data, build_export_data, export_types_to_json, TiledEnumExport,
+    TiledMemberExport, TiledTypeExport, TiledTypeOrEnumExport, TiledValueExport,
 };
-pub use registry::{TiledClassInfo, TiledClassRegistry, TiledDefaultValue, TiledFieldInfo};
+pub use registry::{
+    TiledClassInfo, TiledClassRegistry, TiledDefaultValue, TiledEnumInfo, TiledFieldInfo,
+    TiledTypeKind,
+};
 
 /// Pre-merged properties stored as a component.
 ///

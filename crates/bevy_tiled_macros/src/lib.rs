@@ -5,7 +5,10 @@
 
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{Data, DeriveInput, Fields, Lit, Meta, MetaNameValue, Type, parse_macro_input};
+use syn::{
+    Data, DataEnum, DeriveInput, Fields, Lit, Meta, MetaNameValue, Type, Variant,
+    parse_macro_input, punctuated::Punctuated, token::Comma,
+};
 
 /// Derive macro for registering a type as a Tiled custom class.
 ///
@@ -44,30 +47,44 @@ pub fn derive_tiled_class(input: TokenStream) -> TokenStream {
 }
 
 fn derive_tiled_class_impl(input: DeriveInput) -> syn::Result<TokenStream> {
-    let struct_name = &input.ident;
+    let type_name = &input.ident;
 
-    // Parse #[tiled(name = "...")] attribute on struct
+    // Parse #[tiled(name = "...")] attribute
     let tiled_name = parse_tiled_name_attr(&input.attrs)?;
 
-    // Only support structs with named fields
-    let fields = match &input.data {
-        Data::Struct(data) => match &data.fields {
-            Fields::Named(fields) => &fields.named,
-            _ => {
-                return Err(syn::Error::new_spanned(
-                    struct_name,
-                    "TiledClass only supports structs with named fields",
-                ));
-            }
-        },
+    // Handle structs or enums
+    match &input.data {
+        Data::Struct(data) => {
+            // Handle struct
+            let fields = match &data.fields {
+                Fields::Named(fields) => &fields.named,
+                _ => {
+                    return Err(syn::Error::new_spanned(
+                        type_name,
+                        "TiledClass only supports structs with named fields",
+                    ));
+                }
+            };
+            handle_struct(type_name, &tiled_name, fields)
+        }
+        Data::Enum(data) => {
+            // Handle enum
+            handle_enum(type_name, &tiled_name, data, &input.attrs)
+        }
         _ => {
             return Err(syn::Error::new_spanned(
-                struct_name,
-                "TiledClass can only be derived for structs",
+                type_name,
+                "TiledClass can only be derived for structs or enums",
             ));
         }
-    };
+    }
+}
 
+fn handle_struct(
+    struct_name: &syn::Ident,
+    tiled_name: &str,
+    fields: &Punctuated<syn::Field, Comma>,
+) -> syn::Result<TokenStream> {
     // Generate field deserialization code and metadata
     let mut field_inits = Vec::new();
     let mut field_metadata = Vec::new();
@@ -160,6 +177,166 @@ fn derive_tiled_class_impl(input: DeriveInput) -> syn::Result<TokenStream> {
                 };
 
                 Ok(::std::boxed::Box::new(instance))
+            }
+        }
+    };
+
+    Ok(expanded.into())
+}
+
+fn handle_enum(
+    enum_name: &syn::Ident,
+    tiled_name: &str,
+    data: &DataEnum,
+    attrs: &[syn::Attribute],
+) -> syn::Result<TokenStream> {
+    // Analyze enum variants to determine if unit-only or complex
+    let enum_kind = analyze_enum_variants(&data.variants)?;
+
+    // Check for #[tiled(enum = "struct")] attribute
+    let enum_format = parse_enum_format_attr(attrs)?;
+
+    match (enum_kind, enum_format) {
+        (EnumKind::UnitOnly, EnumFormat::Auto) => {
+            // Generate unit-variant enum implementation
+            generate_unit_enum_impl(enum_name, tiled_name, &data.variants)
+        }
+        (EnumKind::Complex, _) | (_, EnumFormat::Struct) => {
+            // Complex enums or forced struct format - deferred to future PR
+            Err(syn::Error::new_spanned(
+                &data.variants,
+                "Complex enums (with variant data) are not yet supported. Use #[derive(TiledClass)] on structs for now. Complex enum support coming in future PR!",
+            ))
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+enum EnumKind {
+    UnitOnly,
+    Complex,
+}
+
+#[derive(Debug, PartialEq)]
+enum EnumFormat {
+    Auto,
+    Struct,
+}
+
+/// Analyze enum variants to determine if they're all unit variants
+fn analyze_enum_variants(variants: &Punctuated<Variant, Comma>) -> syn::Result<EnumKind> {
+    for variant in variants {
+        match &variant.fields {
+            Fields::Unit => continue,
+            Fields::Named(_) | Fields::Unnamed(_) => {
+                return Ok(EnumKind::Complex);
+            }
+        }
+    }
+    Ok(EnumKind::UnitOnly)
+}
+
+/// Parse #[tiled(enum = "struct")] attribute
+fn parse_enum_format_attr(attrs: &[syn::Attribute]) -> syn::Result<EnumFormat> {
+    for attr in attrs {
+        if !attr.path().is_ident("tiled") {
+            continue;
+        }
+
+        if let Meta::List(list) = &attr.meta {
+            // Try to parse as key-value: enum = "struct"
+            if let Ok(nested) = syn::parse2::<MetaNameValue>(list.tokens.clone()) {
+                if nested.path.is_ident("enum") {
+                    if let syn::Expr::Lit(expr_lit) = &nested.value {
+                        if let Lit::Str(lit_str) = &expr_lit.lit {
+                            if lit_str.value() == "struct" {
+                                return Ok(EnumFormat::Struct);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Ok(EnumFormat::Auto)
+}
+
+/// Generate implementation for unit-variant enum
+fn generate_unit_enum_impl(
+    enum_name: &syn::Ident,
+    tiled_name: &str,
+    variants: &Punctuated<Variant, Comma>,
+) -> syn::Result<TokenStream> {
+    // Extract variant names
+    let variant_names: Vec<String> = variants
+        .iter()
+        .map(|v| v.ident.to_string())
+        .collect();
+
+    // Generate match arms for string → enum conversion
+    let variant_match_arms: Vec<_> = variants
+        .iter()
+        .map(|variant| {
+            let variant_ident = &variant.ident;
+            let variant_name = variant_ident.to_string();
+            quote! {
+                #variant_name => Ok(::std::boxed::Box::new(#enum_name::#variant_ident)),
+            }
+        })
+        .collect();
+
+    // Generate match arms for FromTiledProperty
+    let from_property_arms: Vec<_> = variants
+        .iter()
+        .map(|variant| {
+            let variant_ident = &variant.ident;
+            let variant_name = variant_ident.to_string();
+            quote! {
+                #variant_name => ::std::option::Option::Some(Self::#variant_ident),
+            }
+        })
+        .collect();
+
+    // Generate static variants array name
+    let variants_array_name =
+        quote::format_ident!("__TILED_ENUM_VARIANTS_{}", enum_name.to_string().to_uppercase());
+
+    let expanded = quote! {
+        // Static array of variant names
+        #[doc(hidden)]
+        static #variants_array_name: &[&str] = &[
+            #(#variant_names),*
+        ];
+
+        // Implement FromTiledProperty for the enum
+        impl bevy_tiled_core::properties::FromTiledProperty for #enum_name {
+            fn from_property(value: &::tiled::PropertyValue) -> ::std::option::Option<Self> {
+                match value {
+                    ::tiled::PropertyValue::StringValue(s) => {
+                        match s.as_str() {
+                            #(#from_property_arms)*
+                            _ => ::std::option::Option::None,
+                        }
+                    }
+                    _ => ::std::option::Option::None,
+                }
+            }
+        }
+
+        // Submit to inventory for compile-time registration
+        ::inventory::submit! {
+            bevy_tiled_core::properties::TiledEnumInfo {
+                type_id: ::std::any::TypeId::of::<#enum_name>(),
+                name: #tiled_name,
+                variants: #variants_array_name,
+                from_string: |s: &str| -> ::std::result::Result<::std::boxed::Box<dyn ::bevy::reflect::Reflect>, ::std::string::String> {
+                    match s {
+                        #(#variant_match_arms)*
+                        _ => ::std::result::Result::Err(
+                            ::std::format!("Invalid variant '{}' for enum '{}'", s, #tiled_name)
+                        ),
+                    }
+                },
             }
         }
     };
