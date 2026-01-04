@@ -1482,7 +1482,18 @@ dependencies = [
  "bevy",
  "bevy-inspector-egui",
  "bevy_tiled_assets",
+ "bevy_tiled_macros",
+ "inventory",
  "tiled",
+]
+
+[[package]]
+name = "bevy_tiled_macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

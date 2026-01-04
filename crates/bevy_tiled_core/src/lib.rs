@@ -65,9 +65,12 @@ pub mod prelude {
         ImageLayerCreated, MapCreated, ObjectCreated, ObjectLayerCreated, TileLayerCreated,
         TiledEvent,
     };
-    pub use crate::plugin::BevyTiledCorePlugin;
-    pub use crate::properties::MergedProperties;
+    pub use crate::plugin::{BevyTiledCoreConfig, BevyTiledCorePlugin};
+    pub use crate::properties::{FromTiledProperty, MergedProperties, TiledClassRegistry};
+
+    // Re-export the TiledClass derive macro
+    pub use bevy_tiled_macros::TiledClass;
 }
 
-// Re-export plugin at crate root for convenience
-pub use plugin::BevyTiledCorePlugin;
+// Re-export plugin types at crate root for convenience
+pub use plugin::{BevyTiledCoreConfig, BevyTiledCorePlugin};

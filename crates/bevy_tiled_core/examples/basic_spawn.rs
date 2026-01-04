@@ -16,7 +16,11 @@ use bevy_tiled_core::prelude::*;
 
 fn main() {
     App::new()
-        .add_plugins((DefaultPlugins, BevyTiledAssetsPlugin, BevyTiledCorePlugin))
+        .add_plugins((
+            DefaultPlugins,
+            BevyTiledAssetsPlugin,
+            BevyTiledCorePlugin::default(),
+        ))
         // Add EguiPlugin before WorldInspectorPlugin
         .add_plugins(EguiPlugin::default())
         .add_plugins(WorldInspectorPlugin::default())
