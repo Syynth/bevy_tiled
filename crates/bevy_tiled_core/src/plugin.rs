@@ -4,10 +4,6 @@ use std::path::PathBuf;
 
 use bevy::prelude::*;
 
-use crate::components::{
-    LayerId, LayersInMap, ObjectId, ObjectsInMap, TiledLayer, TiledLayerMapOf, TiledMap,
-    TiledObject, TiledObjectMapOf,
-};
 use crate::properties::{TiledClassRegistry, export_types_to_json};
 use crate::systems::process_loaded_maps;
 
@@ -102,17 +98,6 @@ impl Plugin for BevyTiledCorePlugin {
 
         // Insert registry as a resource
         app.insert_resource(registry);
-
-        // Register types for reflection
-        app.register_type::<TiledMap>()
-            .register_type::<TiledLayer>()
-            .register_type::<LayerId>()
-            .register_type::<LayersInMap>()
-            .register_type::<TiledLayerMapOf>()
-            .register_type::<ObjectsInMap>()
-            .register_type::<TiledObjectMapOf>()
-            .register_type::<ObjectId>()
-            .register_type::<TiledObject>();
 
         // Add reactive spawning system (runs in PreUpdate before user systems)
         app.add_systems(PreUpdate, process_loaded_maps);

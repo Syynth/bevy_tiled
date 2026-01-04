@@ -62,8 +62,8 @@ pub mod prelude {
         LayerId, ObjectId, TiledLayer, TiledLayerMapOf, TiledMap, TiledObject, TiledObjectMapOf,
     };
     pub use crate::events::{
-        ImageLayerCreated, MapCreated, ObjectCreated, ObjectLayerCreated, TileLayerCreated,
-        TiledEvent,
+        GroupLayerSpawned, ImageLayerSpawned, ObjectLayerSpawned, ObjectSpawned,
+        TileLayerSpawned,
     };
     pub use crate::plugin::{BevyTiledCoreConfig, BevyTiledCorePlugin};
     pub use crate::properties::{FromTiledProperty, MergedProperties, TiledClassRegistry};

@@ -11,12 +11,15 @@
 use bevy::app::AppExit;
 use bevy::asset::AssetPlugin;
 use bevy::prelude::*;
+use bevy_tiled_assets::BevyTiledAssetsPlugin;
 use bevy_tiled_core::prelude::*;
 
 fn main() {
     App::new()
         .add_plugins(MinimalPlugins)
         .add_plugins(AssetPlugin::default())
+        // Add assets plugin to provide required resources
+        .add_plugins(BevyTiledAssetsPlugin)
         // Configure plugin to export types on startup
         .add_plugins(BevyTiledCorePlugin::new(BevyTiledCoreConfig {
             export_types_path: Some("exported_types.json".into()),

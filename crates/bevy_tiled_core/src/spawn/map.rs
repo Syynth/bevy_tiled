@@ -19,12 +19,18 @@ use crate::systems::SpawnContext;
 /// * `commands` - Bevy commands for entity spawning
 /// * `map_entity` - The entity with the `TiledMap` component
 /// * `context` - Spawn context with asset data access
-pub fn spawn_map(commands: &mut Commands, map_entity: Entity, context: &SpawnContext) {
+/// * `type_registry` - App type registry for reflection-based component insertion
+pub fn spawn_map(
+    commands: &mut Commands,
+    map_entity: Entity,
+    context: &SpawnContext,
+    type_registry: &AppTypeRegistry,
+) {
     let mut layer_entities = Vec::new();
 
     // Spawn each top-level layer (spawn_layer handles recursion for groups)
     for layer in context.map_asset.map.layers() {
-        let layer_entity = spawn_layer(commands, &layer, map_entity, context);
+        let layer_entity = spawn_layer(commands, &layer, map_entity, context, type_registry);
         layer_entities.push(layer_entity);
     }
 

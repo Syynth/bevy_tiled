@@ -9,12 +9,40 @@ use std::collections::HashMap;
 use std::string::String;
 use tiled::Properties;
 
+/// Default value for a Tiled class field.
+///
+/// Represents the default value in a format that can be exported to Tiled's JSON.
+#[derive(Debug, Clone)]
+pub enum TiledDefaultValue {
+    Bool(bool),
+    Int(i32),
+    Float(f32),
+    String(&'static str),
+    Color { r: u8, g: u8, b: u8, a: u8 },
+}
+
+/// Information about a single field in a `TiledClass`.
+///
+/// Used for JSON export to provide autocomplete in Tiled editor.
+#[derive(Debug, Clone)]
+pub struct TiledFieldInfo {
+    /// Field name
+    pub name: &'static str,
+
+    /// Tiled property type ("bool", "int", "float", "string", "color")
+    pub tiled_type: &'static str,
+
+    /// Default value for this field
+    pub default_value: TiledDefaultValue,
+}
+
 /// Information about a registered `TiledClass` type.
 ///
 /// This struct is submitted via `inventory::submit!` by the `TiledClass` derive macro.
 /// Each registered type provides:
 /// - Its `TypeId` for reflection lookups
 /// - A display name matching the Tiled custom class name
+/// - Field metadata for JSON export
 /// - A deserialization function to convert properties to a component
 pub struct TiledClassInfo {
     /// The `TypeId` of the registered component
@@ -22,6 +50,9 @@ pub struct TiledClassInfo {
 
     /// The name used in Tiled custom properties (e.g., `"game::Door"`)
     pub name: &'static str,
+
+    /// Field definitions for JSON export
+    pub fields: &'static [TiledFieldInfo],
 
     /// Function to deserialize Tiled properties into this component type
     /// Returns a boxed reflected component or an error message
@@ -85,6 +116,11 @@ impl TiledClassRegistry {
     /// Iterate all registered type names.
     pub fn type_names(&self) -> impl Iterator<Item = &str> {
         self.by_name.keys().map(String::as_str)
+    }
+
+    /// Iterate all registered class info.
+    pub fn iter(&self) -> impl Iterator<Item = &'static TiledClassInfo> + '_ {
+        self.by_name.values().copied()
     }
 
     /// Get the number of registered types.

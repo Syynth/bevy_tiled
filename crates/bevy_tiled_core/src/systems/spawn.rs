@@ -32,17 +32,19 @@ pub fn process_loaded_maps(
     asset_server: Res<AssetServer>,
     map_assets: Res<Assets<TiledMapAsset>>,
     tileset_assets: Res<Assets<TiledTilesetAsset>>,
+    template_assets: Res<Assets<bevy_tiled_assets::prelude::TiledTemplateAsset>>,
+    registry: Res<crate::properties::TiledClassRegistry>,
+    type_registry: Res<AppTypeRegistry>,
     mut commands: Commands,
     mut map_query: Query<(Entity, &TiledMap), Or<(Changed<TiledMap>, With<RespawnTiledMap>)>>,
 ) {
     for (map_entity, tiled_map) in map_query.iter_mut() {
         // Check if all dependencies have finished loading
-        let load_state = asset_server.get_recursive_dependency_load_state(&tiled_map.handle);
-
-        if !matches!(load_state, Some(RecursiveDependencyLoadState::Loaded)) {
-            // Still loading, skip for now
+        let Some(RecursiveDependencyLoadState::Loaded) =
+            asset_server.get_recursive_dependency_load_state(&tiled_map.handle)
+        else {
             continue;
-        }
+        };
 
         // Get the map asset
         let Some(map_asset) = map_assets.get(&tiled_map.handle) else {
@@ -51,10 +53,10 @@ pub fn process_loaded_maps(
         };
 
         // Create spawn context with asset references
-        let context = SpawnContext::new(map_asset, &tileset_assets);
+        let context = SpawnContext::new(map_asset, &tileset_assets, &template_assets, &registry);
 
         // Spawn the map hierarchy
-        spawn_map(&mut commands, map_entity, &context);
+        spawn_map(&mut commands, map_entity, &context, &type_registry);
 
         // Remove RespawnTiledMap marker if present
         commands.entity(map_entity).remove::<RespawnTiledMap>();
