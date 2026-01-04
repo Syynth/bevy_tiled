@@ -10,10 +10,10 @@ use super::tilemap_builder::TilemapBuilder;
 /// Observer that renders tile layers when spawned by Layer 2.
 ///
 /// This is the main entry point for tile layer rendering. When Layer 2 spawns
-/// a tile layer entity with TileLayerData, this observer:
+/// a tile layer entity with `TileLayerData`, this observer:
 /// 1. Reads the pre-processed tile data
 /// 2. Groups tiles by tileset
-/// 3. Creates bevy_ecs_tilemap structures
+/// 3. Creates `bevy_ecs_tilemap` structures
 /// 4. Spawns tilemap entities as children
 pub fn on_tile_layer_spawned(
     trigger: On<TileLayerSpawned>,

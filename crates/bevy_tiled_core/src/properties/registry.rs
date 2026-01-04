@@ -9,6 +9,28 @@ use std::collections::HashMap;
 use std::string::String;
 use tiled::Properties;
 
+/// Tiled property type kind.
+///
+/// Represents the type system used by Tiled for custom properties.
+/// For non-primitive types, use `Class` with a `property_type` string.
+#[derive(Debug, Clone, PartialEq)]
+pub enum TiledTypeKind {
+    /// Boolean type (`true`/`false`)
+    Bool,
+    /// Integer type
+    Int,
+    /// Floating point type
+    Float,
+    /// String type
+    String,
+    /// Color type (#AARRGGBB format)
+    Color,
+    /// Class type (custom type with properties)
+    ///
+    /// The `property_type` field contains the full type path (e.g., "glam::Vec2", "game::Door")
+    Class { property_type: &'static str },
+}
+
 /// Default value for a Tiled class field.
 ///
 /// Represents the default value in a format that can be exported to Tiled's JSON.
@@ -29,8 +51,8 @@ pub struct TiledFieldInfo {
     /// Field name
     pub name: &'static str,
 
-    /// Tiled property type ("bool", "int", "float", "string", "color")
-    pub tiled_type: &'static str,
+    /// Tiled property type
+    pub tiled_type: TiledTypeKind,
 
     /// Default value for this field
     pub default_value: TiledDefaultValue,

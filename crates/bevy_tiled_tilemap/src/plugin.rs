@@ -1,4 +1,4 @@
-//! Main plugin for bevy_tiled_tilemap.
+//! Main plugin for `bevy_tiled_tilemap`.
 
 use bevy::prelude::*;
 
@@ -14,7 +14,7 @@ use crate::features::AnimationSpeed;
 #[cfg(feature = "parallax")]
 use crate::features::parallax;
 
-/// Plugin for rendering Tiled maps with bevy_ecs_tilemap.
+/// Plugin for rendering Tiled maps with `bevy_ecs_tilemap`.
 ///
 /// This Layer 3 plugin observes events from `bevy_tiled_core` and adds
 /// rendering components to entities.
@@ -27,18 +27,12 @@ use crate::features::parallax;
 /// App::new()
 ///     .add_plugins(BevyTiledTilemapPlugin::default());
 /// ```
+#[derive(Default)]
 pub struct BevyTiledTilemapPlugin {
     /// Configuration for rendering
     pub config: TilemapRenderConfig,
 }
 
-impl Default for BevyTiledTilemapPlugin {
-    fn default() -> Self {
-        Self {
-            config: TilemapRenderConfig::default(),
-        }
-    }
-}
 
 impl BevyTiledTilemapPlugin {
     /// Create plugin with custom configuration.

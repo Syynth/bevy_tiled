@@ -87,7 +87,7 @@ pub fn add_parallax_to_tile_layer(trigger: On<TileLayerSpawned>, mut commands: C
     }
 }
 
-/// Observer that checks image layers for parallax properties and adds ParallaxLayer component.
+/// Observer that checks image layers for parallax properties and adds `ParallaxLayer` component.
 pub fn add_parallax_to_image_layer(trigger: On<ImageLayerSpawned>, mut commands: Commands) {
     let event = trigger.event();
 
@@ -96,7 +96,7 @@ pub fn add_parallax_to_image_layer(trigger: On<ImageLayerSpawned>, mut commands:
         .properties
         .get("parallaxX")
         .and_then(|v| match v {
-            PropertyValue::FloatValue(f) => Some(*f as f32),
+            PropertyValue::FloatValue(f) => Some(*f),
             PropertyValue::IntValue(i) => Some(*i as f32),
             _ => None,
         })
@@ -106,7 +106,7 @@ pub fn add_parallax_to_image_layer(trigger: On<ImageLayerSpawned>, mut commands:
         .properties
         .get("parallaxY")
         .and_then(|v| match v {
-            PropertyValue::FloatValue(f) => Some(*f as f32),
+            PropertyValue::FloatValue(f) => Some(*f),
             PropertyValue::IntValue(i) => Some(*i as f32),
             _ => None,
         })
@@ -126,8 +126,8 @@ pub fn add_parallax_to_image_layer(trigger: On<ImageLayerSpawned>, mut commands:
 
 /// System that updates parallax layer positions based on camera movement.
 ///
-/// Moves layers with ParallaxLayer component based on the delta movement of
-/// the ParallaxCamera, scaled by their parallax factors.
+/// Moves layers with `ParallaxLayer` component based on the delta movement of
+/// the `ParallaxCamera`, scaled by their parallax factors.
 pub fn update_parallax_layers(
     camera_query: Query<&Transform, (With<ParallaxCamera>, Without<ParallaxLayer>)>,
     mut layer_query: Query<(&mut Transform, &mut ParallaxLayer)>,

@@ -1,4 +1,4 @@
-//! # bevy_tiled_native (Planned)
+//! # `bevy_tiled_native` (Planned)
 //!
 //! This crate is a placeholder for future Bevy native tilemap rendering integration.
 //!
@@ -35,7 +35,7 @@
 //! stabilized and released. Track progress at:
 //! - [Bevy Tilemap Tracking Issue](https://github.com/bevyengine/bevy/issues/...)
 //!
-//! ## Use bevy_tiled_tilemap Instead
+//! ## Use `bevy_tiled_tilemap` Instead
 //!
 //! For production use today, use `bevy_tiled_tilemap` which provides full-featured,
 //! high-performance tile rendering using `bevy_ecs_tilemap`.

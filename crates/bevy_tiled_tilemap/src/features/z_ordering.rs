@@ -12,12 +12,12 @@ use bevy_tiled_core::events::{ImageLayerSpawned, ObjectLayerSpawned, ObjectSpawn
 pub struct ZOrderConfig {
     /// Z-coordinate separation between layers (default: 10.0)
     ///
-    /// Each layer gets z = layer_id * layer_separation
+    /// Each layer gets z = `layer_id` * `layer_separation`
     pub layer_separation: f32,
 
     /// Z-offset for objects above their parent layer (default: 1.0)
     ///
-    /// Objects get z = parent_layer_z + object_z_offset
+    /// Objects get z = `parent_layer_z` + `object_z_offset`
     pub object_z_offset: f32,
 }
 
@@ -32,7 +32,7 @@ impl Default for ZOrderConfig {
 
 /// Observer that sets z-order for tile layers.
 ///
-/// Sets Transform.z = layer_id * layer_separation
+/// Sets Transform.z = `layer_id` * `layer_separation`
 pub fn set_tile_layer_z_order(
     trigger: On<TileLayerSpawned>,
     config: Res<ZOrderConfig>,
@@ -47,7 +47,7 @@ pub fn set_tile_layer_z_order(
 
 /// Observer that sets z-order for image layers.
 ///
-/// Sets Transform.z = layer_id * layer_separation
+/// Sets Transform.z = `layer_id` * `layer_separation`
 pub fn set_image_layer_z_order(
     trigger: On<ImageLayerSpawned>,
     config: Res<ZOrderConfig>,
@@ -62,7 +62,7 @@ pub fn set_image_layer_z_order(
 
 /// Observer that sets z-order for object layers.
 ///
-/// Sets Transform.z = layer_id * layer_separation
+/// Sets Transform.z = `layer_id` * `layer_separation`
 pub fn set_object_layer_z_order(
     trigger: On<ObjectLayerSpawned>,
     config: Res<ZOrderConfig>,
@@ -77,7 +77,7 @@ pub fn set_object_layer_z_order(
 
 /// Observer that sets z-order for objects relative to their parent layer.
 ///
-/// Objects inherit their parent layer's z and add object_z_offset
+/// Objects inherit their parent layer's z and add `object_z_offset`
 pub fn set_object_z_order(
     trigger: On<ObjectSpawned>,
     config: Res<ZOrderConfig>,

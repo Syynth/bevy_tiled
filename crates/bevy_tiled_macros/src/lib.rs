@@ -241,29 +241,79 @@ fn extract_option_inner_type(ty: &Type) -> Option<&Type> {
     None
 }
 
-/// Map Rust type to Tiled property type string
-fn map_rust_type_to_tiled(ty: &Type) -> &'static str {
+/// Extract full type path from a `TypePath`.
+///
+/// For common types like glam vectors, infers the full module path.
+/// For other types, returns just the type name.
+fn extract_full_type_path(type_path: &syn::TypePath) -> String {
+    let segments: Vec<String> = type_path
+        .path
+        .segments
+        .iter()
+        .map(|seg| seg.ident.to_string())
+        .collect();
+
+    // If there's already a module path, use it
+    if segments.len() > 1 {
+        return segments.join("::");
+    }
+
+    // For simple types without module path, infer common ones
+    let type_name = segments.last().unwrap();
+    match type_name.as_str() {
+        // Glam vector types - all variants use the same glam:: prefix
+        "Vec2" | "Vec3" | "Vec4" | "IVec2" | "IVec3" | "IVec4" | "UVec2" | "UVec3" | "UVec4"
+        | "DVec2" | "DVec3" | "DVec4" => format!("glam::{}", type_name),
+        // For other types, just use the type name
+        other => other.to_string(),
+    }
+}
+
+/// Extract just the type name from a `TypePath` (last segment).
+fn extract_type_name(type_path: &syn::TypePath) -> String {
+    type_path
+        .path
+        .segments
+        .last()
+        .map(|seg| seg.ident.to_string())
+        .unwrap_or_default()
+}
+
+/// Map Rust type to Tiled property type.
+///
+/// Returns a `TiledTypeKind` token stream for use in macro expansion.
+fn map_rust_type_to_tiled(ty: &Type) -> proc_macro2::TokenStream {
     // For Option<T>, unwrap to get the inner type
     let actual_type = extract_option_inner_type(ty).unwrap_or(ty);
 
-    if let Type::Path(type_path) = actual_type
-        && let Some(segment) = type_path.path.segments.last()
-    {
-        let type_name = segment.ident.to_string();
-        return match type_name.as_str() {
-            "bool" => "bool",
+    if let Type::Path(type_path) = actual_type {
+        let type_name = extract_type_name(type_path);
+
+        // Check if it's a primitive type
+        match type_name.as_str() {
+            "bool" => return quote! { bevy_tiled_core::properties::TiledTypeKind::Bool },
             "i32" | "i64" | "i16" | "i8" | "u32" | "u64" | "u16" | "u8" | "usize" | "isize" => {
-                "int"
+                return quote! { bevy_tiled_core::properties::TiledTypeKind::Int };
             }
-            "f32" | "f64" => "float",
-            "String" | "str" => "string",
-            "Color" => "color",
-            "Vec2" | "Vec3" => "string", // Tiled doesn't have vector types TODO: this is wrong, we need to implement referenced types the way bevy_ecs_tiled does, and support Vec2, etc.
-            _ => "string",               // Default to string for unknown types
-        };
+            "f32" | "f64" => return quote! { bevy_tiled_core::properties::TiledTypeKind::Float },
+            "String" | "str" => {
+                return quote! { bevy_tiled_core::properties::TiledTypeKind::String };
+            }
+            "Color" => return quote! { bevy_tiled_core::properties::TiledTypeKind::Color },
+            _ => {
+                // Not a primitive - it's a referenced type (Vec2, custom types, etc.)
+                let full_path = extract_full_type_path(type_path);
+                return quote! {
+                    bevy_tiled_core::properties::TiledTypeKind::Class {
+                        property_type: #full_path
+                    }
+                };
+            }
+        }
     }
 
-    "string" // Fallback
+    // Fallback for complex types
+    quote! { bevy_tiled_core::properties::TiledTypeKind::String }
 }
 
 /// Generate `TiledDefaultValue` expression for a field

@@ -1,24 +1,24 @@
 //! Layer 3 extension pattern example.
 //!
 //! This example demonstrates how to build Layer 3 plugins that extend Layer 2
-//! with rendering, physics, or custom game logic. Layer 2 (bevy_tiled_core)
+//! with rendering, physics, or custom game logic. Layer 2 (`bevy_tiled_core`)
 //! provides the entity structure and data; Layer 3 plugins add visual/behavioral
 //! components by observing spawning events.
 //!
 //! ## The Three-Layer Architecture
 //!
-//! - **Layer 1 (bevy_tiled_assets)**: Asset loading (.tmx, .tsx, .tx files)
-//! - **Layer 2 (bevy_tiled_core)**: Entity spawning, property merging, events
+//! - **Layer 1 (`bevy_tiled_assets`)**: Asset loading (.tmx, .tsx, .tx files)
+//! - **Layer 2 (`bevy_tiled_core`)**: Entity spawning, property merging, events
 //! - **Layer 3 (your plugins)**: Rendering, physics, game logic
 //!
 //! ## This Example Shows
 //!
 //! 1. **Simple sprite rendering plugin** - adds sprites to tile layers
 //! 2. **Physics plugin** - adds colliders to objects based on shape
-//! 3. **Custom component plugin** - reacts to spawned TiledClass components
+//! 3. **Custom component plugin** - reacts to spawned `TiledClass` components
 //!
 //! These are minimal examples - real Layer 3 plugins would use
-//! bevy_ecs_tilemap, Avian physics, etc.
+//! `bevy_ecs_tilemap`, Avian physics, etc.
 
 use bevy::prelude::*;
 use bevy_tiled_assets::prelude::*;
@@ -65,7 +65,7 @@ fn spawn_map(mut commands: Commands, asset_server: Res<AssetServer>) {
 
 /// Minimal rendering plugin that adds sprites to tile layers.
 ///
-/// A real implementation would use bevy_ecs_tilemap for performance,
+/// A real implementation would use `bevy_ecs_tilemap` for performance,
 /// but this demonstrates the extension pattern clearly.
 pub struct SimpleSpriteRenderPlugin;
 
@@ -78,7 +78,7 @@ impl Plugin for SimpleSpriteRenderPlugin {
 
 /// Observer that reacts to tile layer spawning.
 ///
-/// This is the Layer 3 extension point - Layer 2 emits TileLayerSpawned,
+/// This is the Layer 3 extension point - Layer 2 emits `TileLayerSpawned`,
 /// Layer 3 adds rendering components.
 fn on_tile_layer_spawned(
     trigger: On<TileLayerSpawned>,
@@ -149,7 +149,7 @@ impl Plugin for SimplePhysicsPlugin {
 
 /// Observer that reacts to object spawning.
 ///
-/// Layer 2 provides pre-computed vertices in TiledObject - Layer 3 uses
+/// Layer 2 provides pre-computed vertices in `TiledObject` - Layer 3 uses
 /// this data to create physics colliders without re-parsing.
 fn on_object_spawned(
     trigger: On<ObjectSpawned>,
@@ -211,7 +211,7 @@ fn on_object_spawned(
 // Layer 3 Example: Custom Component Plugin
 // ============================================================================
 
-/// Plugin that reacts to TiledClass components added by Layer 2.
+/// Plugin that reacts to `TiledClass` components added by Layer 2.
 ///
 /// This demonstrates how Layer 3 plugins can respond to custom game
 /// components that were auto-attached during spawning.
@@ -255,7 +255,7 @@ fn on_object_spawned_check_components(
 
 /// Query pattern: React when specific components are added.
 ///
-/// This example assumes an Enemy component exists (from custom_components example).
+/// This example assumes an Enemy component exists (from `custom_components` example).
 /// In a real plugin, you'd import your game components.
 fn on_enemy_added(
     // NOTE: This would normally use Query<Entity, Added<Enemy>>

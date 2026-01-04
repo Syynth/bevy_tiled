@@ -1,13 +1,13 @@
-//! # bevy_tiled_tilemap
+//! # `bevy_tiled_tilemap`
 //!
 //! High-performance tile layer rendering for `bevy_tiled` using `bevy_ecs_tilemap`.
 //!
 //! This crate is a Layer 3 plugin that observes spawning events from `bevy_tiled_core`
-//! and adds rendering components using bevy_ecs_tilemap for optimal batched rendering.
+//! and adds rendering components using `bevy_ecs_tilemap` for optimal batched rendering.
 //!
 //! ## Features
 //!
-//! - **Tile layers**: Batched rendering with bevy_ecs_tilemap
+//! - **Tile layers**: Batched rendering with `bevy_ecs_tilemap`
 //! - **Multi-tileset support**: Handles layers using multiple tilesets
 //! - **Tile animations**: Automatic frame cycling based on tileset animation data
 //! - **Object rendering**: Sprites for tile objects, debug shapes for collision geometry

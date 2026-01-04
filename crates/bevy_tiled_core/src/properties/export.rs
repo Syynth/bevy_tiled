@@ -3,11 +3,16 @@
 //! Generates a JSON file in the format expected by Tiled's custom property system.
 //! See: <https://doc.mapeditor.org/en/stable/manual/custom-properties/>
 
+use std::collections::HashSet;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
 
-use super::registry::{TiledClassRegistry, TiledDefaultValue};
+use bevy::app::App;
+use bevy::prelude::*;
+use bevy::reflect::{TypeInfo, TypeRegistry, TypeRegistration};
+
+use super::registry::{TiledClassRegistry, TiledDefaultValue, TiledTypeKind};
 
 /// Intermediate representation of a Tiled custom property type for serialization.
 #[derive(Debug, Clone, PartialEq)]
@@ -21,7 +26,10 @@ pub struct TiledTypeExport {
 #[derive(Debug, Clone, PartialEq)]
 pub struct TiledMemberExport {
     pub name: String,
+    /// The base type: "bool", "int", "float", "string", "color", or "class"
     pub tiled_type: String,
+    /// For class types, the full type path (e.g., "glam::Vec2", "game::Door")
+    pub property_type: Option<String>,
     pub value: TiledValueExport,
 }
 
@@ -32,7 +40,8 @@ pub enum TiledValueExport {
     Int(i32),
     Float(f32),
     String(String),
-    Color(String), // Hex format: #AARRGGBB
+    Color(String),   // Hex format: #AARRGGBB
+    ClassDefault,    // Empty object {} for class types
 }
 
 /// Generate export data for all registered `TiledClass` types.
@@ -65,10 +74,24 @@ pub fn build_export_data(registry: &TiledClassRegistry) -> Vec<TiledTypeExport> 
             let members = info
                 .fields
                 .iter()
-                .map(|field| TiledMemberExport {
-                    name: field.name.to_string(),
-                    tiled_type: field.tiled_type.to_string(),
-                    value: convert_default_value(&field.default_value),
+                .map(|field| {
+                    let (tiled_type, property_type) = match &field.tiled_type {
+                        TiledTypeKind::Bool => ("bool".to_string(), None),
+                        TiledTypeKind::Int => ("int".to_string(), None),
+                        TiledTypeKind::Float => ("float".to_string(), None),
+                        TiledTypeKind::String => ("string".to_string(), None),
+                        TiledTypeKind::Color => ("color".to_string(), None),
+                        TiledTypeKind::Class { property_type } => {
+                            ("class".to_string(), Some(property_type.to_string()))
+                        }
+                    };
+
+                    TiledMemberExport {
+                        name: field.name.to_string(),
+                        tiled_type,
+                        property_type,
+                        value: convert_default_value(&field.default_value),
+                    }
                 })
                 .collect();
 
@@ -168,6 +191,11 @@ fn write_types_to_file(file: &mut File, types: &[TiledTypeExport]) -> std::io::R
             writeln!(file, "          \"name\": \"{}\",", member.name)?;
             writeln!(file, "          \"type\": \"{}\",", member.tiled_type)?;
 
+            // Emit propertyType for class types
+            if let Some(ref property_type) = member.property_type {
+                writeln!(file, "          \"propertyType\": \"{}\",", property_type)?;
+            }
+
             // Write default value
             write!(file, "          \"value\": ")?;
             write_value(&mut *file, &member.value)?;
@@ -203,7 +231,216 @@ fn write_value(file: &mut File, value: &TiledValueExport) -> std::io::Result<()>
         TiledValueExport::Float(f) => write!(file, "{}", f),
         TiledValueExport::String(s) => write!(file, "\"{}\"", s),
         TiledValueExport::Color(hex) => write!(file, "\"{}\"", hex),
+        TiledValueExport::ClassDefault => write!(file, "{{}}"),  // Empty object for class types
     }
+}
+
+// ============================================================================
+// Reflection-based Export (Hybrid Approach)
+// ============================================================================
+
+/// Export all types using hybrid approach: TiledClass registry + Bevy reflection.
+///
+/// This function discovers types transitively:
+/// 1. Starts with all TiledClass-registered types
+/// 2. For each type, recursively discovers referenced types
+/// 3. Uses TiledClassRegistry for manually registered types (primary)
+/// 4. Falls back to Bevy's AppTypeRegistry for other types (secondary)
+///
+/// # Arguments
+///
+/// * `app` - The Bevy App instance (for accessing AppTypeRegistry)
+/// * `output_path` - Path where the JSON file should be written
+///
+/// # Example
+///
+/// ```ignore
+/// export_all_types_with_reflection(&app, "assets/custom-types.json")?;
+/// ```
+pub fn export_all_types_with_reflection(
+    app: &App,
+    output_path: impl AsRef<Path>,
+) -> std::io::Result<()> {
+    let mut discovered_types = HashSet::new();
+    let mut types_to_export = Vec::new();
+
+    // Start with all TiledClass types
+    let tiled_registry = app.world().resource::<TiledClassRegistry>();
+    let type_names: Vec<String> = tiled_registry.type_names().map(|s| s.to_string()).collect();
+
+    for type_name in type_names {
+        discover_type_recursive(
+            &type_name,
+            app,
+            &mut discovered_types,
+            &mut types_to_export,
+        );
+    }
+
+    // Renumber IDs sequentially
+    for (i, type_export) in types_to_export.iter_mut().enumerate() {
+        type_export.id = i + 1;
+    }
+
+    // Write to file
+    let path = output_path.as_ref();
+    let mut file = File::create(path)?;
+    write_types_to_file(&mut file, &types_to_export)?;
+
+    Ok(())
+}
+
+/// Recursively discover a type and all its referenced types.
+///
+/// Uses hybrid lookup: TiledClass registry first, then Bevy reflection.
+fn discover_type_recursive(
+    type_path: &str,
+    app: &App,
+    discovered: &mut HashSet<String>,
+    output: &mut Vec<TiledTypeExport>,
+) {
+    // Skip if already processed
+    if discovered.contains(type_path) {
+        return;
+    }
+    discovered.insert(type_path.to_string());
+
+    // Try TiledClass registry first
+    let tiled_registry = app.world().resource::<TiledClassRegistry>();
+    if let Some(tiled_class) = tiled_registry.get(type_path) {
+        // Build export from TiledClass
+        let members: Vec<TiledMemberExport> = tiled_class
+            .fields
+            .iter()
+            .map(|field| {
+                let (tiled_type, property_type) = match &field.tiled_type {
+                    TiledTypeKind::Bool => ("bool".to_string(), None),
+                    TiledTypeKind::Int => ("int".to_string(), None),
+                    TiledTypeKind::Float => ("float".to_string(), None),
+                    TiledTypeKind::String => ("string".to_string(), None),
+                    TiledTypeKind::Color => ("color".to_string(), None),
+                    TiledTypeKind::Class { property_type } => {
+                        ("class".to_string(), Some(property_type.to_string()))
+                    }
+                };
+
+                TiledMemberExport {
+                    name: field.name.to_string(),
+                    tiled_type,
+                    property_type,
+                    value: convert_default_value(&field.default_value),
+                }
+            })
+            .collect();
+
+        output.push(TiledTypeExport {
+            id: 0, // Will be renumbered later
+            name: tiled_class.name.to_string(),
+            members,
+        });
+
+        // Recursively discover referenced types
+        for field in tiled_class.fields {
+            if let TiledTypeKind::Class { property_type } = &field.tiled_type {
+                discover_type_recursive(property_type, app, discovered, output);
+            }
+        }
+        return;
+    }
+
+    // Fall back to Bevy reflection
+    let app_type_registry = app.world().resource::<AppTypeRegistry>();
+    let registry = app_type_registry.read();
+
+    if let Some(reflect_type) = registry.get_with_type_path(type_path) {
+        if let Some(export) = build_reflected_export(reflect_type, &registry) {
+            output.push(export);
+
+            // Recursively discover reflected field types
+            if let TypeInfo::Struct(struct_info) = reflect_type.type_info() {
+                for field in struct_info.iter() {
+                    let field_type_path = field.type_path();
+                    if !is_primitive_type(field_type_path) {
+                        discover_type_recursive(field_type_path, app, discovered, output);
+                    }
+                }
+            }
+        }
+        return;
+    }
+
+    // Type not found - warn but don't fail
+    warn!(
+        "Referenced type '{}' not found in TiledClassRegistry or AppTypeRegistry",
+        type_path
+    );
+}
+
+/// Build a TiledTypeExport from a reflected type.
+///
+/// Returns None if the type is not a struct or doesn't have fields.
+fn build_reflected_export(
+    reflect_type: &TypeRegistration,
+    _registry: &TypeRegistry,
+) -> Option<TiledTypeExport> {
+    let type_info = reflect_type.type_info();
+
+    let TypeInfo::Struct(struct_info) = type_info else {
+        return None;
+    };
+
+    let members: Vec<TiledMemberExport> = struct_info
+        .iter()
+        .map(|field| {
+            let field_type_path = field.type_path();
+            let (tiled_type, property_type) = if is_primitive_type(field_type_path) {
+                (map_primitive_to_tiled(field_type_path), None)
+            } else {
+                ("class".to_string(), Some(field_type_path.to_string()))
+            };
+
+            TiledMemberExport {
+                name: field.name().to_string(),
+                tiled_type,
+                property_type,
+                value: TiledValueExport::ClassDefault,
+            }
+        })
+        .collect();
+
+    Some(TiledTypeExport {
+        id: 0, // Will be renumbered later
+        name: type_info.type_path().to_string(),
+        members,
+    })
+}
+
+/// Check if a type path represents a primitive Tiled type.
+fn is_primitive_type(type_path: &str) -> bool {
+    matches!(
+        type_path,
+        "bool"
+            | "i32"
+            | "i64"
+            | "u32"
+            | "u64"
+            | "f32"
+            | "f64"
+            | "alloc::string::String"
+            | "&str"
+    )
+}
+
+/// Map a primitive Rust type path to a Tiled type string.
+fn map_primitive_to_tiled(type_path: &str) -> String {
+    match type_path {
+        "bool" => "bool",
+        "i32" | "i64" | "u32" | "u64" => "int",
+        "f32" | "f64" => "float",
+        "alloc::string::String" | "&str" => "string",
+        _ => "string",
+    }
+    .to_string()
 }
 
 #[cfg(test)]
@@ -260,12 +497,12 @@ mod tests {
         static TEST_FIELDS: &[TiledFieldInfo] = &[
             TiledFieldInfo {
                 name: "health",
-                tiled_type: "float",
+                tiled_type: TiledTypeKind::Float,
                 default_value: TiledDefaultValue::Float(100.0),
             },
             TiledFieldInfo {
                 name: "enabled",
-                tiled_type: "bool",
+                tiled_type: TiledTypeKind::Bool,
                 default_value: TiledDefaultValue::Bool(true),
             },
         ];
@@ -273,20 +510,30 @@ mod tests {
         // Verify field conversion works
         let members: Vec<TiledMemberExport> = TEST_FIELDS
             .iter()
-            .map(|field| TiledMemberExport {
-                name: field.name.to_string(),
-                tiled_type: field.tiled_type.to_string(),
-                value: convert_default_value(&field.default_value),
+            .map(|field| {
+                let (tiled_type, property_type) = match &field.tiled_type {
+                    TiledTypeKind::Bool => ("bool".to_string(), None),
+                    TiledTypeKind::Float => ("float".to_string(), None),
+                    _ => ("string".to_string(), None),
+                };
+                TiledMemberExport {
+                    name: field.name.to_string(),
+                    tiled_type,
+                    property_type,
+                    value: convert_default_value(&field.default_value),
+                }
             })
             .collect();
 
         assert_eq!(members.len(), 2);
         assert_eq!(members[0].name, "health");
         assert_eq!(members[0].tiled_type, "float");
+        assert_eq!(members[0].property_type, None);
         assert_eq!(members[0].value, TiledValueExport::Float(100.0));
 
         assert_eq!(members[1].name, "enabled");
         assert_eq!(members[1].tiled_type, "bool");
+        assert_eq!(members[1].property_type, None);
         assert_eq!(members[1].value, TiledValueExport::Bool(true));
     }
 
@@ -299,11 +546,13 @@ mod tests {
                 TiledMemberExport {
                     name: "speed".to_string(),
                     tiled_type: "float".to_string(),
+                    property_type: None,
                     value: TiledValueExport::Float(5.0),
                 },
                 TiledMemberExport {
                     name: "team".to_string(),
                     tiled_type: "int".to_string(),
+                    property_type: None,
                     value: TiledValueExport::Int(0),
                 },
             ],

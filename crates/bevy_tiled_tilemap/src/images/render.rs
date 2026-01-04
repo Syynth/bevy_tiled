@@ -7,7 +7,7 @@ use bevy_tiled_core::events::ImageLayerSpawned;
 /// Observer that renders image layers as sprites.
 ///
 /// When an image layer is spawned by Layer 2, this observer:
-/// 1. Reads the ImageLayerData component
+/// 1. Reads the `ImageLayerData` component
 /// 2. Creates a Sprite with the image
 /// 3. Sets custom size if width/height are specified
 pub fn on_image_layer_spawned(

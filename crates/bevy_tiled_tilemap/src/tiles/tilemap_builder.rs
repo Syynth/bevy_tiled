@@ -1,4 +1,4 @@
-//! Converts TileLayerData into bevy_ecs_tilemap structures.
+//! Converts `TileLayerData` into `bevy_ecs_tilemap` structures.
 
 use std::collections::HashMap;
 
@@ -9,7 +9,7 @@ use bevy_tiled_core::components::tile::{TileInstance, TileLayerData};
 
 use super::animations::{AnimationFrame, TileAnimation};
 
-/// Builds bevy_ecs_tilemap structures from Layer 2's TileLayerData.
+/// Builds `bevy_ecs_tilemap` structures from Layer 2's `TileLayerData`.
 ///
 /// Handles the conversion of pre-processed tile data into performant
 /// tilemap rendering structures. For Phase 1, supports single-tileset layers.
@@ -19,7 +19,7 @@ pub struct TilemapBuilder;
 impl TilemapBuilder {
     /// Build tilemap structures from tile layer data.
     ///
-    /// Creates bevy_ecs_tilemap entities as children of the layer entity.
+    /// Creates `bevy_ecs_tilemap` entities as children of the layer entity.
     ///
     /// # Arguments
     ///
@@ -65,7 +65,7 @@ impl TilemapBuilder {
 
     /// Group tiles by their tileset handle.
     ///
-    /// This is necessary because bevy_ecs_tilemap requires one tilemap per texture.
+    /// This is necessary because `bevy_ecs_tilemap` requires one tilemap per texture.
     /// Layers can use multiple tilesets, so we create separate tilemaps for each.
     fn group_by_tileset(
         tile_data: &TileLayerData,
@@ -135,10 +135,11 @@ impl TilemapBuilder {
         tileset: &TiledTilesetAsset,
     ) {
         let tile_size = tileset.tile_size;
+        let tile_count = tiles.len();
 
         for (x, y, tile_instance) in tiles {
             // Get the image handle for this specific tile
-            let Some(tile_image_handle) = tileset.tiles.get(&tile_instance.tile_id) else {
+            let Some(tile_image_handle) = tileset.tile_images.get(&tile_instance.tile_id) else {
                 warn!("Tile ID {} not found in tileset", tile_instance.tile_id);
                 continue;
             };
@@ -174,11 +175,11 @@ impl TilemapBuilder {
 
         info!(
             "Created image collection tilemap with {} tiles as sprites",
-            tiles.len()
+            tile_count
         );
     }
 
-    /// Create tilemap using bevy_ecs_tilemap for atlas tilesets.
+    /// Create tilemap using `bevy_ecs_tilemap` for atlas tilesets.
     fn create_atlas_tilemap(
         commands: &mut Commands,
         layer_entity: Entity,

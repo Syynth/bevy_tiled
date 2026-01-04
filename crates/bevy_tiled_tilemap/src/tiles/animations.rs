@@ -12,7 +12,7 @@ use crate::features::{AnimationSpeed, AnimationsPaused};
 pub struct TileAnimation {
     /// Sequence of animation frames.
     pub frames: Vec<AnimationFrame>,
-    /// Current frame index (0..frames.len()).
+    /// Current frame index (`0..frames.len()`).
     pub current_frame: usize,
     /// Time elapsed in current frame (milliseconds).
     pub elapsed_ms: f32,
@@ -56,7 +56,7 @@ pub struct AnimationFrame {
 
 /// System that updates all animated tiles.
 ///
-/// Advances animation frames based on elapsed time and updates TileTextureIndex.
+/// Advances animation frames based on elapsed time and updates `TileTextureIndex`.
 pub fn update_tile_animations(
     time: Res<Time>,
     speed: Res<AnimationSpeed>,
