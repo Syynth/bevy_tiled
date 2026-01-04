@@ -129,7 +129,8 @@ fn derive_tiled_class_impl(input: DeriveInput) -> syn::Result<TokenStream> {
     }
 
     // Generate static field metadata array (uppercase for lint compliance)
-    let fields_array_name = quote::format_ident!("__TILED_FIELDS_{}", struct_name.to_string().to_uppercase());
+    let fields_array_name =
+        quote::format_ident!("__TILED_FIELDS_{}", struct_name.to_string().to_uppercase());
 
     // Generate the complete implementation
     let expanded = quote! {
@@ -245,25 +246,27 @@ fn map_rust_type_to_tiled(ty: &Type) -> &'static str {
     // For Option<T>, unwrap to get the inner type
     let actual_type = extract_option_inner_type(ty).unwrap_or(ty);
 
-    if let Type::Path(type_path) = actual_type {
-        if let Some(segment) = type_path.path.segments.last() {
-            let type_name = segment.ident.to_string();
-            return match type_name.as_str() {
-                "bool" => "bool",
-                "i32" | "i64" | "i16" | "i8" | "u32" | "u64" | "u16" | "u8" | "usize" | "isize" => "int",
-                "f32" | "f64" => "float",
-                "String" | "str" => "string",
-                "Color" => "color",
-                "Vec2" | "Vec3" => "string", // Tiled doesn't have vector types
-                _ => "string", // Default to string for unknown types
-            };
-        }
+    if let Type::Path(type_path) = actual_type
+        && let Some(segment) = type_path.path.segments.last()
+    {
+        let type_name = segment.ident.to_string();
+        return match type_name.as_str() {
+            "bool" => "bool",
+            "i32" | "i64" | "i16" | "i8" | "u32" | "u64" | "u16" | "u8" | "usize" | "isize" => {
+                "int"
+            }
+            "f32" | "f64" => "float",
+            "String" | "str" => "string",
+            "Color" => "color",
+            "Vec2" | "Vec3" => "string", // Tiled doesn't have vector types TODO: this is wrong, we need to implement referenced types the way bevy_ecs_tiled does, and support Vec2, etc.
+            _ => "string",               // Default to string for unknown types
+        };
     }
 
     "string" // Fallback
 }
 
-/// Generate TiledDefaultValue expression for a field
+/// Generate `TiledDefaultValue` expression for a field
 fn generate_default_value_expr(
     ty: &Type,
     default_attr: &Option<proc_macro2::TokenStream>,
@@ -280,42 +283,36 @@ fn generate_default_value_expr(
     generate_type_default(actual_type)
 }
 
-/// Generate TiledDefaultValue from explicit default attribute
+/// Generate `TiledDefaultValue` from explicit default attribute
 fn generate_default_from_tokens(
     ty: &Type,
     tokens: &proc_macro2::TokenStream,
 ) -> syn::Result<proc_macro2::TokenStream> {
-    if let Type::Path(type_path) = ty {
-        if let Some(segment) = type_path.path.segments.last() {
-            let type_name = segment.ident.to_string();
+    if let Type::Path(type_path) = ty
+        && let Some(segment) = type_path.path.segments.last()
+    {
+        let type_name = segment.ident.to_string();
 
-            return Ok(match type_name.as_str() {
-                "bool" => quote! {
-                    bevy_tiled_core::properties::TiledDefaultValue::Bool(#tokens)
-                },
-                "i32" | "i64" | "i16" | "i8" => quote! {
-                    bevy_tiled_core::properties::TiledDefaultValue::Int(#tokens as i32)
-                },
-                "u32" | "u64" | "u16" | "u8" => quote! {
-                    bevy_tiled_core::properties::TiledDefaultValue::Int(#tokens as i32)
-                },
-                "f32" | "f64" => quote! {
-                    bevy_tiled_core::properties::TiledDefaultValue::Float(#tokens as f32)
-                },
-                "String" => quote! {
-                    bevy_tiled_core::properties::TiledDefaultValue::String("")
-                },
-                "Color" => {
-                    // Color defaults need special handling
-                    quote! {
-                        bevy_tiled_core::properties::TiledDefaultValue::Color { r: 255, g: 255, b: 255, a: 255 }
-                    }
-                },
-                _ => quote! {
-                    bevy_tiled_core::properties::TiledDefaultValue::String("")
-                },
-            });
-        }
+        return Ok(match type_name.as_str() {
+            "bool" => quote! {
+                bevy_tiled_core::properties::TiledDefaultValue::Bool(#tokens)
+            },
+            "i32" | "i64" | "i16" | "i8" | "u32" | "u64" | "u16" | "u8" => quote! {
+                bevy_tiled_core::properties::TiledDefaultValue::Int(#tokens as i32)
+            },
+            "f32" | "f64" => quote! {
+                bevy_tiled_core::properties::TiledDefaultValue::Float(#tokens as f32)
+            },
+            "Color" => {
+                // Color defaults need special handling
+                quote! {
+                    bevy_tiled_core::properties::TiledDefaultValue::Color { r: 255, g: 255, b: 255, a: 255 }
+                }
+            }
+            _ => quote! {
+                bevy_tiled_core::properties::TiledDefaultValue::String("")
+            },
+        });
     }
 
     Ok(quote! {
@@ -323,33 +320,32 @@ fn generate_default_from_tokens(
     })
 }
 
-/// Generate default TiledDefaultValue based on type alone
+/// Generate default `TiledDefaultValue` based on type alone
 fn generate_type_default(ty: &Type) -> syn::Result<proc_macro2::TokenStream> {
-    if let Type::Path(type_path) = ty {
-        if let Some(segment) = type_path.path.segments.last() {
-            let type_name = segment.ident.to_string();
+    if let Type::Path(type_path) = ty
+        && let Some(segment) = type_path.path.segments.last()
+    {
+        let type_name = segment.ident.to_string();
 
-            return Ok(match type_name.as_str() {
-                "bool" => quote! {
-                    bevy_tiled_core::properties::TiledDefaultValue::Bool(false)
-                },
-                "i32" | "i64" | "i16" | "i8" | "u32" | "u64" | "u16" | "u8" | "isize" | "usize" => quote! {
+        return Ok(match type_name.as_str() {
+            "bool" => quote! {
+                bevy_tiled_core::properties::TiledDefaultValue::Bool(false)
+            },
+            "i32" | "i64" | "i16" | "i8" | "u32" | "u64" | "u16" | "u8" | "isize" | "usize" => {
+                quote! {
                     bevy_tiled_core::properties::TiledDefaultValue::Int(0)
-                },
-                "f32" | "f64" => quote! {
-                    bevy_tiled_core::properties::TiledDefaultValue::Float(0.0)
-                },
-                "String" => quote! {
-                    bevy_tiled_core::properties::TiledDefaultValue::String("")
-                },
-                "Color" => quote! {
-                    bevy_tiled_core::properties::TiledDefaultValue::Color { r: 255, g: 255, b: 255, a: 255 }
-                },
-                _ => quote! {
-                    bevy_tiled_core::properties::TiledDefaultValue::String("")
-                },
-            });
-        }
+                }
+            }
+            "f32" | "f64" => quote! {
+                bevy_tiled_core::properties::TiledDefaultValue::Float(0.0)
+            },
+            "Color" => quote! {
+                bevy_tiled_core::properties::TiledDefaultValue::Color { r: 255, g: 255, b: 255, a: 255 }
+            },
+            _ => quote! {
+                bevy_tiled_core::properties::TiledDefaultValue::String("")
+            },
+        });
     }
 
     Ok(quote! {

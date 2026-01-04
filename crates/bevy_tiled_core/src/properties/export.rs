@@ -81,7 +81,7 @@ pub fn build_export_data(registry: &TiledClassRegistry) -> Vec<TiledTypeExport> 
         .collect()
 }
 
-/// Convert TiledDefaultValue to TiledValueExport for serialization.
+/// Convert `TiledDefaultValue` to `TiledValueExport` for serialization.
 fn convert_default_value(value: &TiledDefaultValue) -> TiledValueExport {
     match value {
         TiledDefaultValue::Bool(b) => TiledValueExport::Bool(*b),
@@ -195,7 +195,7 @@ fn write_types_to_file(file: &mut File, types: &[TiledTypeExport]) -> std::io::R
     Ok(())
 }
 
-/// Write a TiledValueExport as JSON
+/// Write a `TiledValueExport` as JSON
 fn write_value(file: &mut File, value: &TiledValueExport) -> std::io::Result<()> {
     match value {
         TiledValueExport::Bool(b) => write!(file, "{}", if *b { "true" } else { "false" }),
@@ -208,6 +208,8 @@ fn write_value(file: &mut File, value: &TiledValueExport) -> std::io::Result<()>
 
 #[cfg(test)]
 mod tests {
+    use std::f32::consts::PI;
+
     use super::*;
 
     #[test]
@@ -226,9 +228,9 @@ mod tests {
 
     #[test]
     fn test_convert_default_value_float() {
-        let value = TiledDefaultValue::Float(3.14);
+        let value = TiledDefaultValue::Float(PI);
         let result = convert_default_value(&value);
-        assert_eq!(result, TiledValueExport::Float(3.14));
+        assert_eq!(result, TiledValueExport::Float(PI));
     }
 
     #[test]
@@ -253,8 +255,7 @@ mod tests {
     #[test]
     fn test_build_export_data_structure() {
         // Create a mock registry with test data
-        use crate::properties::registry::{TiledClassInfo, TiledFieldInfo};
-        use std::any::TypeId;
+        use crate::properties::registry::TiledFieldInfo;
 
         static TEST_FIELDS: &[TiledFieldInfo] = &[
             TiledFieldInfo {

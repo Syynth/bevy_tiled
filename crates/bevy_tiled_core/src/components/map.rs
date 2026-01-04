@@ -11,7 +11,7 @@ use bevy_tiled_assets::prelude::TiledMapAsset;
 ///
 /// ```rust,no_run
 /// # use bevy::prelude::*;
-/// # use bevy_tiled_core::TiledMap;
+/// # use bevy_tiled_core::prelude::TiledMap;
 /// fn spawn_map(mut commands: Commands, asset_server: Res<AssetServer>) {
 ///     commands.spawn(TiledMap {
 ///         handle: asset_server.load("maps/level1.tmx"),

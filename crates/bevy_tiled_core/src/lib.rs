@@ -30,13 +30,13 @@
 //! ```rust,no_run
 //! use bevy::prelude::*;
 //! use bevy_tiled_assets::BevyTiledAssetsPlugin;
-//! use bevy_tiled_core::{BevyTiledCorePlugin, TiledMap};
+//! use bevy_tiled_core::prelude::*;
 //!
 //! fn main() {
 //!     App::new()
 //!         .add_plugins(DefaultPlugins)
 //!         .add_plugins(BevyTiledAssetsPlugin)
-//!         .add_plugins(BevyTiledCorePlugin)
+//!         .add_plugins(BevyTiledCorePlugin::default())
 //!         .add_systems(Startup, spawn_map)
 //!         .run();
 //! }

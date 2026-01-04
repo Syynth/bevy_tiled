@@ -1,6 +1,12 @@
 [workspace]
-members = ["crates/bevy_tiled_assets", "crates/bevy_tiled_core"]
-resolver = "2"
+members = [
+    "crates/bevy_tiled_assets",
+    "crates/bevy_tiled_core",
+    "crates/bevy_tiled_macros",
+    "crates/bevy_tiled_native",
+    "crates/bevy_tiled_tilemap",
+]
+resolver = "3"
 
 [workspace.package]
 version = "0.0.1"
