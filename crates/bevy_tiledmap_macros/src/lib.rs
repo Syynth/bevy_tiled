@@ -143,36 +143,32 @@ fn handle_struct(
     paths: &CratePaths,
 ) -> syn::Result<TokenStream> {
     let properties = &paths.properties;
+    let tiled = &paths.tiled;
 
-    // Generate field deserialization code and metadata
-    // We need two versions: one for Result context, one for Option context
-    let mut field_inits_result = Vec::new();
-    let mut field_inits_option = Vec::new();
+    // Generate field overlay statements and metadata
+    // Overlays are statements that modify a mutable default instance
+    let mut field_overlays_result = Vec::new();
+    let mut field_overlays_option = Vec::new();
     let mut field_metadata = Vec::new();
 
     for field in fields {
         let field_name = field.ident.as_ref().unwrap();
         let field_type = &field.ty;
+        let field_name_str = field_name.to_string();
 
         // Check for #[tiled(skip)]
         if has_skip_attr(&field.attrs) {
-            // Use Default::default() for skipped fields
-            let skip_init = quote! {
-                #field_name: ::std::default::Default::default()
-            };
-            field_inits_result.push(skip_init.clone());
-            field_inits_option.push(skip_init);
+            // Skipped fields use default - no overlay needed
             // Skipped fields don't appear in metadata
             continue;
         }
 
         // Check for #[tiled(default = ...)]
-        let default_value = parse_default_attr(&field.attrs)?;
+        let _default_value = parse_default_attr(&field.attrs)?;
 
         // Generate field metadata for JSON export
-        let field_name_str = field_name.to_string();
         let tiled_type = map_rust_type_to_tiled(field_type, paths);
-        let default_expr = generate_default_value_expr(field_type, &default_value, paths)?;
+        let default_expr = generate_default_value_expr(field_type, &_default_value, paths)?;
 
         field_metadata.push(quote! {
             #properties::TiledFieldInfo {
@@ -187,15 +183,12 @@ fn handle_struct(
 
         // Check if this is a Handle<T> field
         if is_handle_type(actual_type) {
-            // Handle<T> fields use AssetServer to load
             let is_optional = extract_option_inner_type(field_type).is_some();
-            let tiled = &paths.tiled;
 
             if is_optional {
-                // Option<Handle<T>>: load if path exists, None otherwise
-                // Paths are already normalized during map loading (Layer 1)
-                field_inits_result.push(quote! {
-                    #field_name: __properties.get(#field_name_str)
+                // Option<Handle<T>>: load if path exists and asset server available
+                field_overlays_result.push(quote! {
+                    instance.#field_name = __properties.get(#field_name_str)
                         .and_then(|v| match v {
                             #tiled::PropertyValue::StringValue(s) if !s.is_empty() => {
                                 __asset_server.map(|server| server.load(s.clone()))
@@ -204,74 +197,52 @@ fn handle_struct(
                                 __asset_server.map(|server| server.load(s.clone()))
                             }
                             _ => ::std::option::Option::None,
-                        })
+                        });
                 });
-                // For Option context (FromTiledProperty), no asset server available
-                field_inits_option.push(quote! {
-                    #field_name: ::std::option::Option::None
-                });
+                // For Option context (FromTiledProperty), no asset server - stays default (None)
+                // No overlay needed
             } else {
-                // Required Handle<T>: must have path and asset server
-                // Paths are already normalized during map loading (Layer 1)
-                field_inits_result.push(quote! {
-                    #field_name: {
-                        let path = __properties.get(#field_name_str)
-                            .and_then(|v| match v {
-                                #tiled::PropertyValue::StringValue(s) => ::std::option::Option::Some(s.clone()),
-                                #tiled::PropertyValue::FileValue(s) => ::std::option::Option::Some(s.clone()),
-                                _ => ::std::option::Option::None,
-                            })
-                            .ok_or_else(|| ::std::format!("Missing asset path for field '{}'", #field_name_str))?;
-                        let server = __asset_server
-                            .ok_or_else(|| ::std::format!("AssetServer required for field '{}' but not provided", #field_name_str))?;
-                        server.load(path)
+                // Required Handle<T>: overlay if path and asset server exist
+                field_overlays_result.push(quote! {
+                    if let ::std::option::Option::Some(v) = __properties.get(#field_name_str) {
+                        let path = match v {
+                            #tiled::PropertyValue::StringValue(s) if !s.is_empty() => ::std::option::Option::Some(s.clone()),
+                            #tiled::PropertyValue::FileValue(s) if !s.is_empty() => ::std::option::Option::Some(s.clone()),
+                            _ => ::std::option::Option::None,
+                        };
+                        if let ::std::option::Option::Some(p) = path {
+                            if let ::std::option::Option::Some(server) = __asset_server {
+                                instance.#field_name = server.load(p);
+                            }
+                        }
                     }
                 });
-                // For Option context (FromTiledProperty), Handle fields require AssetServer which is not available.
-                // Return None immediately to indicate deserialization cannot proceed.
-                field_inits_option.push(quote! {
-                    #field_name: {
-                        // Handle<T> fields require AssetServer which FromTiledProperty does not have
-                        return ::std::option::Option::None;
-                        #[allow(unreachable_code)]
-                        ::std::default::Default::default()
-                    }
-                });
+                // For Option context (FromTiledProperty), Handle<T> fields stay default
+                // No overlay - they'll use Default::default()
             }
             continue;
         }
 
-        // Generate property access code for Result context (used in __tiled_from_properties)
-        // and Option context (used in FromTiledProperty impl)
+        // Generate overlay for regular fields
         if let Some(inner_type) = extract_option_inner_type(field_type) {
-            // Optional fields: extract inner type T from Option<T>
-            let init = quote! {
-                #field_name: __properties.get(#field_name_str)
-                    .and_then(|v| <#inner_type as #properties::FromTiledProperty>::from_property(v))
+            // Option<T> fields: overlay the inner value if present
+            let overlay = quote! {
+                instance.#field_name = __properties.get(#field_name_str)
+                    .and_then(|v| <#inner_type as #properties::FromTiledProperty>::from_property(v));
             };
-            field_inits_result.push(init.clone());
-            field_inits_option.push(init);
-        } else if let Some(ref default) = default_value {
-            // Fields with defaults use the default if missing
-            let init = quote! {
-                #field_name: __properties.get(#field_name_str)
-                    .and_then(|v| <#field_type as #properties::FromTiledProperty>::from_property(v))
-                    .unwrap_or(#default)
-            };
-            field_inits_result.push(init.clone());
-            field_inits_option.push(init);
+            field_overlays_result.push(overlay.clone());
+            field_overlays_option.push(overlay);
         } else {
-            // Required fields - different handling for Result vs Option context
-            field_inits_result.push(quote! {
-                #field_name: __properties.get(#field_name_str)
-                    .and_then(|v| <#field_type as #properties::FromTiledProperty>::from_property(v))
-                    .ok_or_else(|| format!("Missing required property '{}'", #field_name_str))?
-            });
-            // For Option context, use ? which propagates None
-            field_inits_option.push(quote! {
-                #field_name: __properties.get(#field_name_str)
-                    .and_then(|v| <#field_type as #properties::FromTiledProperty>::from_property(v))?
-            });
+            // Regular fields: overlay if property exists and parses
+            let overlay = quote! {
+                if let ::std::option::Option::Some(v) = __properties.get(#field_name_str) {
+                    if let ::std::option::Option::Some(parsed) = <#field_type as #properties::FromTiledProperty>::from_property(v) {
+                        instance.#field_name = parsed;
+                    }
+                }
+            };
+            field_overlays_result.push(overlay.clone());
+            field_overlays_option.push(overlay);
         }
     }
 
@@ -280,7 +251,6 @@ fn handle_struct(
         quote::format_ident!("__TILED_FIELDS_{}", struct_name.to_string().to_uppercase());
 
     let inventory = &paths.inventory;
-    let tiled = &paths.tiled;
 
     // Generate the complete implementation
     let expanded = quote! {
@@ -306,9 +276,11 @@ fn handle_struct(
                 __properties: &#tiled::Properties,
                 __asset_server: ::std::option::Option<&::bevy::asset::AssetServer>,
             ) -> ::std::result::Result<::std::boxed::Box<dyn ::bevy::reflect::Reflect>, ::std::string::String> {
-                let instance = Self {
-                    #(#field_inits_result),*
-                };
+                // Start with default instance
+                let mut instance = Self::default();
+
+                // Overlay properties that exist
+                #(#field_overlays_result)*
 
                 Ok(::std::boxed::Box::new(instance))
             }
@@ -319,9 +291,12 @@ fn handle_struct(
             fn from_property(value: &#tiled::PropertyValue) -> ::std::option::Option<Self> {
                 match value {
                     #tiled::PropertyValue::ClassValue { properties: __properties, .. } => {
-                        let instance = Self {
-                            #(#field_inits_option),*
-                        };
+                        // Start with default instance
+                        let mut instance = Self::default();
+
+                        // Overlay properties that exist
+                        #(#field_overlays_option)*
+
                         ::std::option::Option::Some(instance)
                     }
                     _ => ::std::option::Option::None,

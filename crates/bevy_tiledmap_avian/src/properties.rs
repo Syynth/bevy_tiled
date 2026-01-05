@@ -118,6 +118,24 @@ pub struct PhysicsSettings {
     pub lock_rotation: bool,
 }
 
+impl Default for PhysicsSettings {
+    fn default() -> Self {
+        Self {
+            body_type: BodyType::Static,
+            friction: 0.5,
+            restitution: 0.0,
+            density: 1.0,
+            collision_groups: String::new(),
+            collision_mask: String::new(),
+            is_sensor: false,
+            linear_damping: None,
+            angular_damping: None,
+            gravity_scale: None,
+            lock_rotation: false,
+        }
+    }
+}
+
 impl PhysicsSettings {
     /// Convert collision groups/mask strings to Avian's `CollisionLayers`.
     ///
