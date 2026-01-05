@@ -5,16 +5,16 @@
     },
     "activeFile": "",
     "expandedProjectPaths": [
-        ".",
-        "maps"
+        "maps",
+        "."
     ],
     "fileStates": {
         "demo.tmx": {
-            "scale": 1.0399,
+            "scale": 1.9245,
             "selectedLayer": 1,
             "viewCenter": {
-                "x": 212.03961919415332,
-                "y": 244.25425521684775
+                "x": 250.19485580670306,
+                "y": 157.4434918160561
             }
         },
         "maps/basic_physics.tmx": {
@@ -58,8 +58,8 @@
     "project": "everything.tiled-project",
     "property.type": "Player",
     "recentFiles": [
-        "terrains.tsx",
         "demo.tmx",
+        "terrains.tsx",
         "simple_map.tmx"
     ],
     "tileset.lastUsedFormat": "tsx"

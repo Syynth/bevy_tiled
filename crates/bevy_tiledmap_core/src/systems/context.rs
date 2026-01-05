@@ -1,6 +1,6 @@
 //! Spawn context for accessing asset data during entity spawning.
 
-use bevy::prelude::*;
+use bevy::{asset::AssetServer, prelude::*};
 use bevy_tiledmap_assets::assets::map::TilesetReference;
 use bevy_tiledmap_assets::prelude::{TiledMapAsset, TiledTemplateAsset, TiledTilesetAsset};
 use tiled::Properties;
@@ -20,6 +20,9 @@ pub struct SpawnContext<'a> {
 
     /// `TiledClass` registry for component deserialization
     pub registry: &'a crate::properties::TiledClassRegistry,
+
+    /// Asset server for loading `Handle<T>` fields during deserialization
+    pub asset_server: &'a AssetServer,
 }
 
 impl<'a> SpawnContext<'a> {
@@ -29,12 +32,14 @@ impl<'a> SpawnContext<'a> {
         tileset_assets: &'a Assets<TiledTilesetAsset>,
         template_assets: &'a Assets<TiledTemplateAsset>,
         registry: &'a crate::properties::TiledClassRegistry,
+        asset_server: &'a AssetServer,
     ) -> Self {
         Self {
             map_asset,
             tileset_assets,
             template_assets,
             registry,
+            asset_server,
         }
     }
 
@@ -56,24 +61,20 @@ impl<'a> SpawnContext<'a> {
 
     /// Get merged properties for an object (template + object override).
     ///
-    /// In tiled v0.15, template properties are automatically merged during map parsing,
-    /// so this method simply returns the object's properties which already contain
-    /// any template inheritance.
+    /// Returns the normalized properties from the map asset, where file paths have been
+    /// resolved to asset-root-relative paths.
+    ///
+    /// In tiled v0.15, template properties are automatically merged during map parsing.
+    /// The returned properties contain any template inheritance, with file paths normalized.
     ///
     /// # Arguments
     ///
-    /// * `object` - The object from the map
+    /// * `object_id` - The object ID from the map
     ///
     /// # Returns
     ///
-    /// A reference to the object's properties (already merged with template if applicable)
-    pub fn get_merged_object_properties<'b>(
-        &self,
-        object: &'b tiled::ObjectData,
-    ) -> &'b Properties {
-        // NOTE: The tiled crate (v0.15) automatically merges template properties
-        // during map parsing, so object.properties already contains the merged result.
-        // Template properties serve as defaults, and object properties override them.
-        &object.properties
+    /// The object's normalized properties if found
+    pub fn get_object_properties(&self, object_id: u32) -> Option<&Properties> {
+        self.map_asset.object_properties.get(&object_id)
     }
 }

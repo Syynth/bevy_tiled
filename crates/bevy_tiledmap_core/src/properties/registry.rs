@@ -3,7 +3,7 @@
 //! Uses the inventory crate for compile-time registration of types marked with
 //! `#[derive(TiledClass)]`.
 
-use bevy::prelude::*;
+use bevy::{asset::AssetServer, prelude::*};
 use std::any::TypeId;
 use std::collections::HashMap;
 use std::string::String;
@@ -25,6 +25,10 @@ pub enum TiledTypeKind {
     String,
     /// Color type (#AARRGGBB format)
     Color,
+    /// File type (asset path for `Handle<T>` fields)
+    ///
+    /// When deserialized, this triggers asset loading via AssetServer.
+    File,
     /// Class type (custom type with properties)
     ///
     /// The `property_type` field contains the full type path (e.g., "`glam::Vec2`", "`game::Door`")
@@ -131,9 +135,13 @@ pub struct TiledClassInfo {
     /// Field definitions for JSON export
     pub fields: &'static [TiledFieldInfo],
 
-    /// Function to deserialize Tiled properties into this component type
-    /// Returns a boxed reflected component or an error message
-    pub from_properties: fn(&Properties) -> Result<Box<dyn Reflect>, String>,
+    /// Function to deserialize Tiled properties into this component type.
+    ///
+    /// The optional `AssetServer` parameter is required for loading `Handle<T>` fields.
+    /// Pass `None` if the type has no asset handle fields.
+    ///
+    /// Returns a boxed reflected component or an error message.
+    pub from_properties: fn(&Properties, Option<&AssetServer>) -> Result<Box<dyn Reflect>, String>,
 }
 
 // Collect all TiledClassInfo submissions at compile time

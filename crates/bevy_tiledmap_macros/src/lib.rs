@@ -21,11 +21,10 @@ fn get_crate_paths() -> (
     // Try to find the umbrella crate first
     if let Ok(found) = crate_name("bevy_tiledmap") {
         let base = match found {
-            FoundCrate::Itself => quote!(crate),
-            FoundCrate::Name(name) => {
-                let ident = format_ident!("{}", name);
-                quote!(#ident)
-            }
+            // For FoundCrate::Itself, we still use the crate name because:
+            // - Examples within the crate use `bevy_tiledmap::` not `crate::`
+            // - The macro generates code that runs in user code, not lib code
+            FoundCrate::Itself | FoundCrate::Name(_) => quote!(::bevy_tiledmap),
         };
         // Umbrella crate: properties are at bevy_tiledmap::core::properties
         (
@@ -36,11 +35,8 @@ fn get_crate_paths() -> (
     } else if let Ok(found) = crate_name("bevy_tiledmap_core") {
         // Fall back to core crate directly
         let base = match found {
-            FoundCrate::Itself => quote!(crate),
-            FoundCrate::Name(name) => {
-                let ident = format_ident!("{}", name);
-                quote!(#ident)
-            }
+            // Same reasoning as above
+            FoundCrate::Itself | FoundCrate::Name(_) => quote!(::bevy_tiledmap_core),
         };
         // Core crate: properties are at bevy_tiledmap_core::properties
         // inventory and tiled must be root-level deps in this case
@@ -52,9 +48,9 @@ fn get_crate_paths() -> (
     } else {
         // Fallback - assume umbrella crate
         (
-            quote!(bevy_tiledmap::core::properties),
-            quote!(bevy_tiledmap::inventory),
-            quote!(bevy_tiledmap::tiled),
+            quote!(::bevy_tiledmap::core::properties),
+            quote!(::bevy_tiledmap::inventory),
+            quote!(::bevy_tiledmap::tiled),
         )
     }
 }
@@ -149,7 +145,9 @@ fn handle_struct(
     let properties = &paths.properties;
 
     // Generate field deserialization code and metadata
-    let mut field_inits = Vec::new();
+    // We need two versions: one for Result context, one for Option context
+    let mut field_inits_result = Vec::new();
+    let mut field_inits_option = Vec::new();
     let mut field_metadata = Vec::new();
 
     for field in fields {
@@ -159,9 +157,11 @@ fn handle_struct(
         // Check for #[tiled(skip)]
         if has_skip_attr(&field.attrs) {
             // Use Default::default() for skipped fields
-            field_inits.push(quote! {
+            let skip_init = quote! {
                 #field_name: ::std::default::Default::default()
-            });
+            };
+            field_inits_result.push(skip_init.clone());
+            field_inits_option.push(skip_init);
             // Skipped fields don't appear in metadata
             continue;
         }
@@ -182,30 +182,97 @@ fn handle_struct(
             }
         });
 
-        // Generate property access code
-        let field_init = if let Some(inner_type) = extract_option_inner_type(field_type) {
+        // Get the actual type (unwrap Option if needed)
+        let actual_type = extract_option_inner_type(field_type).unwrap_or(field_type);
+
+        // Check if this is a Handle<T> field
+        if is_handle_type(actual_type) {
+            // Handle<T> fields use AssetServer to load
+            let is_optional = extract_option_inner_type(field_type).is_some();
+            let tiled = &paths.tiled;
+
+            if is_optional {
+                // Option<Handle<T>>: load if path exists, None otherwise
+                // Paths are already normalized during map loading (Layer 1)
+                field_inits_result.push(quote! {
+                    #field_name: __properties.get(#field_name_str)
+                        .and_then(|v| match v {
+                            #tiled::PropertyValue::StringValue(s) if !s.is_empty() => {
+                                __asset_server.map(|server| server.load(s.clone()))
+                            }
+                            #tiled::PropertyValue::FileValue(s) if !s.is_empty() => {
+                                __asset_server.map(|server| server.load(s.clone()))
+                            }
+                            _ => ::std::option::Option::None,
+                        })
+                });
+                // For Option context (FromTiledProperty), no asset server available
+                field_inits_option.push(quote! {
+                    #field_name: ::std::option::Option::None
+                });
+            } else {
+                // Required Handle<T>: must have path and asset server
+                // Paths are already normalized during map loading (Layer 1)
+                field_inits_result.push(quote! {
+                    #field_name: {
+                        let path = __properties.get(#field_name_str)
+                            .and_then(|v| match v {
+                                #tiled::PropertyValue::StringValue(s) => ::std::option::Option::Some(s.clone()),
+                                #tiled::PropertyValue::FileValue(s) => ::std::option::Option::Some(s.clone()),
+                                _ => ::std::option::Option::None,
+                            })
+                            .ok_or_else(|| ::std::format!("Missing asset path for field '{}'", #field_name_str))?;
+                        let server = __asset_server
+                            .ok_or_else(|| ::std::format!("AssetServer required for field '{}' but not provided", #field_name_str))?;
+                        server.load(path)
+                    }
+                });
+                // For Option context (FromTiledProperty), Handle fields require AssetServer which is not available.
+                // Return None immediately to indicate deserialization cannot proceed.
+                field_inits_option.push(quote! {
+                    #field_name: {
+                        // Handle<T> fields require AssetServer which FromTiledProperty does not have
+                        return ::std::option::Option::None;
+                        #[allow(unreachable_code)]
+                        ::std::default::Default::default()
+                    }
+                });
+            }
+            continue;
+        }
+
+        // Generate property access code for Result context (used in __tiled_from_properties)
+        // and Option context (used in FromTiledProperty impl)
+        if let Some(inner_type) = extract_option_inner_type(field_type) {
             // Optional fields: extract inner type T from Option<T>
-            quote! {
+            let init = quote! {
                 #field_name: __properties.get(#field_name_str)
                     .and_then(|v| <#inner_type as #properties::FromTiledProperty>::from_property(v))
-            }
-        } else if let Some(default) = default_value {
+            };
+            field_inits_result.push(init.clone());
+            field_inits_option.push(init);
+        } else if let Some(ref default) = default_value {
             // Fields with defaults use the default if missing
-            quote! {
+            let init = quote! {
                 #field_name: __properties.get(#field_name_str)
                     .and_then(|v| <#field_type as #properties::FromTiledProperty>::from_property(v))
                     .unwrap_or(#default)
-            }
+            };
+            field_inits_result.push(init.clone());
+            field_inits_option.push(init);
         } else {
-            // Required fields error if missing
-            quote! {
+            // Required fields - different handling for Result vs Option context
+            field_inits_result.push(quote! {
                 #field_name: __properties.get(#field_name_str)
                     .and_then(|v| <#field_type as #properties::FromTiledProperty>::from_property(v))
                     .ok_or_else(|| format!("Missing required property '{}'", #field_name_str))?
-            }
-        };
-
-        field_inits.push(field_init);
+            });
+            // For Option context, use ? which propagates None
+            field_inits_option.push(quote! {
+                #field_name: __properties.get(#field_name_str)
+                    .and_then(|v| <#field_type as #properties::FromTiledProperty>::from_property(v))?
+            });
+        }
     }
 
     // Generate static field metadata array (uppercase for lint compliance)
@@ -237,12 +304,28 @@ fn handle_struct(
             #[doc(hidden)]
             fn __tiled_from_properties(
                 __properties: &#tiled::Properties,
+                __asset_server: ::std::option::Option<&::bevy::asset::AssetServer>,
             ) -> ::std::result::Result<::std::boxed::Box<dyn ::bevy::reflect::Reflect>, ::std::string::String> {
                 let instance = Self {
-                    #(#field_inits),*
+                    #(#field_inits_result),*
                 };
 
                 Ok(::std::boxed::Box::new(instance))
+            }
+        }
+
+        // Implement FromTiledProperty to allow nested class fields
+        impl #properties::FromTiledProperty for #struct_name {
+            fn from_property(value: &#tiled::PropertyValue) -> ::std::option::Option<Self> {
+                match value {
+                    #tiled::PropertyValue::ClassValue { properties: __properties, .. } => {
+                        let instance = Self {
+                            #(#field_inits_option),*
+                        };
+                        ::std::option::Option::Some(instance)
+                    }
+                    _ => ::std::option::Option::None,
+                }
             }
         }
     };
@@ -279,8 +362,21 @@ fn handle_unit_struct(struct_name: &syn::Ident, tiled_name: &str, paths: &CrateP
             #[doc(hidden)]
             fn __tiled_from_properties(
                 _properties: &#tiled::Properties,
+                _asset_server: ::std::option::Option<&::bevy::asset::AssetServer>,
             ) -> ::std::result::Result<::std::boxed::Box<dyn ::bevy::reflect::Reflect>, ::std::string::String> {
                 Ok(::std::boxed::Box::new(Self))
+            }
+        }
+
+        // Implement FromTiledProperty to allow nested class fields
+        impl #properties::FromTiledProperty for #struct_name {
+            fn from_property(value: &#tiled::PropertyValue) -> ::std::option::Option<Self> {
+                match value {
+                    #tiled::PropertyValue::ClassValue { .. } => {
+                        ::std::option::Option::Some(Self)
+                    }
+                    _ => ::std::option::Option::None,
+                }
             }
         }
     };
@@ -1077,6 +1173,16 @@ fn extract_type_name(type_path: &syn::TypePath) -> String {
         .unwrap_or_default()
 }
 
+/// Check if a type is `Handle<T>`.
+fn is_handle_type(ty: &Type) -> bool {
+    if let Type::Path(type_path) = ty {
+        if let Some(segment) = type_path.path.segments.last() {
+            return segment.ident == "Handle";
+        }
+    }
+    false
+}
+
 /// Map Rust type to Tiled property type.
 ///
 /// Returns a `TiledTypeKind` token stream for use in macro expansion.
@@ -1084,6 +1190,11 @@ fn map_rust_type_to_tiled(ty: &Type, paths: &CratePaths) -> proc_macro2::TokenSt
     let properties = &paths.properties;
     // For Option<T>, unwrap to get the inner type
     let actual_type = extract_option_inner_type(ty).unwrap_or(ty);
+
+    // Check for Handle<T> - these become File types (asset paths)
+    if is_handle_type(actual_type) {
+        return quote! { #properties::TiledTypeKind::File };
+    }
 
     if let Type::Path(type_path) = actual_type {
         let type_name = extract_type_name(type_path);

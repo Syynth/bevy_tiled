@@ -123,8 +123,11 @@ pub fn spawn_objects_layer(
             // Tiled rotation is clockwise in degrees, Bevy is counter-clockwise in radians
             .with_rotation(Quat::from_rotation_z(-object.rotation.to_radians()));
 
-        // Get merged properties (template + object)
-        let merged_props = context.get_merged_object_properties(&object);
+        // Get normalized properties from map asset (file paths resolved during loading)
+        // Fall back to raw object properties if not found
+        let merged_props = context
+            .get_object_properties(object.id())
+            .unwrap_or(&object.properties);
 
         // Spawn object entity with base components
         let mut entity_cmd = commands.spawn((
@@ -180,7 +183,7 @@ fn attach_registered_components(
             // Try to find this class in the registry
             if let Some(info) = context.registry.get(property_type) {
                 // Call the generated deserialization function
-                match (info.from_properties)(class_props) {
+                match (info.from_properties)(class_props, Some(context.asset_server)) {
                     Ok(component_box) => {
                         // Verify it has ReflectComponent
                         let type_id = component_box.type_id();

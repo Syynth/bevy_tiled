@@ -4,6 +4,7 @@
 //! to Rust types.
 
 use bevy::app::App;
+use bevy::asset::AssetServer;
 use bevy::prelude::*;
 use bevy::reflect::{ReflectMut, TypeInfo, TypeRegistry, TypeRegistration};
 use tiled::{Properties, PropertyValue};
@@ -276,7 +277,9 @@ pub fn deserialize_class(
     // 1. Try TiledClass registry first
     let tiled_registry = app.world().resource::<TiledClassRegistry>();
     if let Some(tiled_class) = tiled_registry.get(property_type) {
-        return (tiled_class.from_properties)(properties)
+        // Get AssetServer if available (needed for Handle<T> fields)
+        let asset_server = app.world().get_resource::<AssetServer>();
+        return (tiled_class.from_properties)(properties, asset_server)
             .map_err(DeserializeError::TypeError);
     }
 

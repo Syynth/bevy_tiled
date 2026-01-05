@@ -1,31 +1,27 @@
 //! Generate comprehensive type definitions for the demo project.
 //!
-//! Run this to generate `assets/tiled_types.json` with all custom property types:
+//! Run this to generate `tiled_types.json` with all custom property types:
 //! ```bash
-//! cargo run --example comprehensive_types
+//! cargo run -p bevy_tiledmap_core --example comprehensive_types
 //! ```
 
-use bevy::{log::LogPlugin, prelude::*};
+use bevy::{asset::AssetPlugin, log::LogPlugin, prelude::*};
+use bevy_tiledmap_assets::TiledmapAssetsPlugin;
 use bevy_tiledmap_core::prelude::*;
 
 fn main() {
     // Build the app (which exports types during plugin initialization)
     let mut app = App::new();
-    app.add_plugins((MinimalPlugins, LogPlugin::default()))
+    app.add_plugins((MinimalPlugins, LogPlugin::default(), AssetPlugin::default()))
+        .add_plugins(TiledmapAssetsPlugin)
         .add_plugins(TiledmapCorePlugin::new(TiledmapCoreConfig {
-            // Export to workspace root assets directory
-            export_types_path: Some("../../assets/tiled_types.json".into()),
-        }))
-        // Register all custom types
-        .register_type::<GameplaySettings>()
-        .register_type::<LootSettings>()
-        .register_type::<LootTier>()
-        .register_type::<EnemySettings>()
-        .register_type::<EnemyType>()
-        .register_type::<SpawnSettings>();
+            // Export to current directory
+            export_types_path: Some("tiled_types.json".into()),
+        }));
 
-    // Plugin exports types during build, so we're done!
-    info!("✅ Type definitions exported to ../../assets/tiled_types.json");
+    // Run the app to trigger the Startup system that exports types
+    app.update();
+    println!("✅ Type definitions exported to tiled_types.json");
     info!("   (workspace root: assets/tiled_types.json)");
     info!("Import this file into Tiled for autocomplete on custom properties.");
     info!("Next steps:");
@@ -156,4 +152,34 @@ pub struct SpawnSettings {
     /// Maximum number of entities this spawn point can create (0 = unlimited)
     #[tiled(default = 0)]
     pub max_spawns: i32,
+}
+
+/// Waypoint configuration - tests transitive reflection discovery of glam types.
+#[derive(Component, Reflect, TiledClass, Debug, Clone, Default)]
+#[reflect(Component)]
+#[tiled(name = "Waypoint")]
+pub struct Waypoint {
+    /// Target position (tests glam::IVec2 discovery via reflection)
+    #[tiled(default)]
+    pub target_tile: IVec2,
+
+    /// Movement speed to next waypoint
+    #[tiled(default = 100.0)]
+    pub speed: f32,
+
+    /// Optional offset (tests glam::Vec2 discovery via reflection)
+    pub offset: Option<Vec2>,
+}
+
+/// Entity with sprite - tests Handle<Image> field support.
+#[derive(Component, Reflect, TiledClass, Debug, Clone, Default)]
+#[reflect(Component)]
+#[tiled(name = "SpriteEntity")]
+pub struct SpriteEntity {
+    /// The sprite image asset path
+    pub sprite: Option<Handle<Image>>,
+
+    /// Scale factor for the sprite
+    #[tiled(default = 1.0)]
+    pub scale: f32,
 }

@@ -78,7 +78,7 @@ pub fn process_loaded_maps(
         commands.entity(map_entity).insert(Name::new(format!("Map: {}", map_name)));
 
         // Create spawn context with asset references
-        let context = SpawnContext::new(map_asset, &tileset_assets, &template_assets, &registry);
+        let context = SpawnContext::new(map_asset, &tileset_assets, &template_assets, &registry, &asset_server);
 
         // Spawn the map hierarchy
         spawn_map(&mut commands, map_entity, &context, &type_registry);

@@ -110,24 +110,30 @@ impl AssetLoader for TiledMapAssetLoader {
             let (tiled_offset, topleft_chunk, bottomright_chunk) =
                 calculate_infinite_map_data(&map);
 
-            // 8. Extract custom properties
-            let properties = map.properties.clone();
+            // 8. Extract and normalize custom properties
+            // Normalize FileValue paths to be asset-root-relative (resolves ../foo paths)
+            let mut properties = map.properties.clone();
+            normalize_property_paths(&mut properties, load_context);
 
-            // 9. Extract layer properties
+            // 9. Extract and normalize layer properties
             let mut layer_properties = HashMap::default();
             for layer in map.layers() {
                 if !layer.properties.is_empty() {
-                    layer_properties.insert(layer.id(), layer.properties.clone());
+                    let mut props = layer.properties.clone();
+                    normalize_property_paths(&mut props, load_context);
+                    layer_properties.insert(layer.id(), props);
                 }
             }
 
-            // 10. Extract object properties from all object layers
+            // 10. Extract and normalize object properties from all object layers
             let mut object_properties = HashMap::default();
             for layer in map.layers() {
                 if let Some(object_layer) = layer.as_object_layer() {
                     for object in object_layer.objects() {
                         if !object.properties.is_empty() {
-                            object_properties.insert(object.id(), object.properties.clone());
+                            let mut props = object.properties.clone();
+                            normalize_property_paths(&mut props, load_context);
+                            object_properties.insert(object.id(), props);
                         }
                     }
                 }
@@ -341,4 +347,40 @@ fn resolve_relative_path(
         .replace('\\', "/");
 
     Ok(asset_path)
+}
+
+/// Normalize all FileValue paths in properties to be asset-root-relative.
+///
+/// Tiled stores file references as relative paths (e.g., `../transitions/fade.toml`).
+/// Bevy's AssetServer rejects paths with `..` components for security reasons.
+/// This function resolves relative paths to absolute asset-root-relative paths.
+///
+/// Handles nested ClassValue properties recursively.
+///
+/// # Arguments
+/// * `properties` - The properties map to normalize (modified in place)
+/// * `load_context` - The current asset's load context for path resolution
+fn normalize_property_paths(properties: &mut tiled::Properties, load_context: &LoadContext) {
+    for (_key, value) in properties.iter_mut() {
+        normalize_property_value(value, load_context);
+    }
+}
+
+/// Normalize a single PropertyValue, handling FileValue and nested ClassValue.
+fn normalize_property_value(value: &mut tiled::PropertyValue, load_context: &LoadContext) {
+    match value {
+        tiled::PropertyValue::FileValue(path) => {
+            // Resolve relative path to asset-root-relative
+            if let Ok(resolved) = resolve_relative_path(load_context, path) {
+                *path = resolved;
+            }
+            // If resolution fails, keep original path (will error at load time with better context)
+        }
+        tiled::PropertyValue::ClassValue { properties, .. } => {
+            // Recursively normalize nested class properties
+            normalize_property_paths(properties, load_context);
+        }
+        // Other property types don't need normalization
+        _ => {}
+    }
 }

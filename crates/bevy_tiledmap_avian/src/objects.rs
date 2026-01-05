@@ -188,7 +188,8 @@ fn resolve_physics_settings(
     let class_info = registry.get("avian::PhysicsSettings")?;
 
     // Deserialize using the from_properties function
-    match (class_info.from_properties)(class_props) {
+    // PhysicsSettings doesn't have Handle fields, so we pass None for AssetServer
+    match (class_info.from_properties)(class_props, None) {
         Ok(boxed_reflect) => {
             // Downcast to PhysicsSettings using the type registry
             let registry_lock = type_registry.read();

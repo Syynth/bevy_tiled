@@ -8,7 +8,6 @@ use std::fs::File;
 use std::io::Write;
 use std::path::Path;
 
-use bevy::app::App;
 use bevy::prelude::*;
 use bevy::reflect::{TypeInfo, TypeRegistry, TypeRegistration};
 
@@ -100,6 +99,7 @@ pub fn build_export_data(registry: &TiledClassRegistry) -> Vec<TiledTypeExport> 
                         TiledTypeKind::Float => ("float".to_string(), None, convert_default_value(&field.default_value)),
                         TiledTypeKind::String => ("string".to_string(), None, convert_default_value(&field.default_value)),
                         TiledTypeKind::Color => ("color".to_string(), None, convert_default_value(&field.default_value)),
+                        TiledTypeKind::File => ("file".to_string(), None, TiledValueExport::String(String::new())),
                         TiledTypeKind::Class { property_type } => {
                             // Check if this is actually an enum type
                             // Try exact match first, then fuzzy match by suffix
@@ -280,6 +280,11 @@ fn export_complex_enum(
                             "color".to_string(),
                             None,
                             convert_default_value(&field.default_value),
+                        ),
+                        TiledTypeKind::File => (
+                            "file".to_string(),
+                            None,
+                            TiledValueExport::String(String::new()),
                         ),
                         TiledTypeKind::Class { property_type } => {
                             // Check if this is an enum
@@ -562,30 +567,30 @@ fn write_mixed_types_to_file(
 ///
 /// # Arguments
 ///
-/// * `app` - The Bevy App instance (for accessing `AppTypeRegistry`)
+/// * `world` - The Bevy World (for accessing `AppTypeRegistry`)
 /// * `output_path` - Path where the JSON file should be written
 ///
 /// # Example
 ///
 /// ```ignore
-/// export_all_types_with_reflection(&app, "assets/custom-types.json")?;
+/// export_all_types_with_reflection(world, "assets/custom-types.json")?;
 /// ```
 pub fn export_all_types_with_reflection(
-    app: &App,
+    world: &World,
     output_path: impl AsRef<Path>,
 ) -> std::io::Result<()> {
     let mut discovered_types = HashSet::new();
     let mut all_exports = Vec::new();
 
     // Start with all TiledClass types
-    let tiled_registry = app.world().resource::<TiledClassRegistry>();
+    let tiled_registry = world.resource::<TiledClassRegistry>();
 
     // Export class types
     let type_names: Vec<String> = tiled_registry.type_names().map(ToString::to_string).collect();
     for type_name in type_names {
         discover_type_recursive(
             &type_name,
-            app,
+            world,
             &mut discovered_types,
             &mut all_exports,
         );
@@ -621,7 +626,7 @@ pub fn export_all_types_with_reflection(
                             if let TiledTypeKind::Class { property_type } = &field.tiled_type {
                                 discover_type_recursive(
                                     property_type,
-                                    app,
+                                    world,
                                     &mut discovered_types,
                                     &mut all_exports,
                                 );
@@ -654,7 +659,7 @@ pub fn export_all_types_with_reflection(
 /// Uses hybrid lookup: `TiledClass` registry first, then Bevy reflection.
 fn discover_type_recursive(
     type_path: &str,
-    app: &App,
+    world: &World,
     discovered: &mut HashSet<String>,
     output: &mut Vec<TiledTypeOrEnumExport>,
 ) {
@@ -665,7 +670,7 @@ fn discover_type_recursive(
     discovered.insert(type_path.to_string());
 
     // Try TiledClass registry first
-    let tiled_registry = app.world().resource::<TiledClassRegistry>();
+    let tiled_registry = world.resource::<TiledClassRegistry>();
     if let Some(tiled_class) = tiled_registry.get(type_path) {
         // Build export from TiledClass
         let members: Vec<TiledMemberExport> = tiled_class
@@ -678,6 +683,7 @@ fn discover_type_recursive(
                     TiledTypeKind::Float => ("float".to_string(), None, convert_default_value(&field.default_value)),
                     TiledTypeKind::String => ("string".to_string(), None, convert_default_value(&field.default_value)),
                     TiledTypeKind::Color => ("color".to_string(), None, convert_default_value(&field.default_value)),
+                    TiledTypeKind::File => ("file".to_string(), None, TiledValueExport::String(String::new())),
                     TiledTypeKind::Class { property_type } => {
                         // Check if this is actually an enum type
                         // Try exact match first, then fuzzy match by suffix
@@ -727,7 +733,7 @@ fn discover_type_recursive(
         for field in tiled_class.fields {
             match &field.tiled_type {
                 TiledTypeKind::Class { property_type } | TiledTypeKind::Enum { property_type, .. } => {
-                    discover_type_recursive(property_type, app, discovered, output);
+                    discover_type_recursive(property_type, world, discovered, output);
                 }
                 _ => {}
             }
@@ -736,7 +742,7 @@ fn discover_type_recursive(
     }
 
     // Fall back to Bevy reflection
-    let app_type_registry = app.world().resource::<AppTypeRegistry>();
+    let app_type_registry = world.resource::<AppTypeRegistry>();
     let registry = app_type_registry.read();
 
     if let Some(reflect_type) = registry.get_with_type_path(type_path) {
@@ -748,7 +754,7 @@ fn discover_type_recursive(
                 for field in struct_info.iter() {
                     let field_type_path = field.type_path();
                     if !is_primitive_type(field_type_path) {
-                        discover_type_recursive(field_type_path, app, discovered, output);
+                        discover_type_recursive(field_type_path, world, discovered, output);
                     }
                 }
             }
