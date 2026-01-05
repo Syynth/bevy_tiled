@@ -25,7 +25,6 @@ fn main() {
                     enable_parallax: true,
                     // Disable debug shape rendering
                     enable_debug_shapes: false,
-                    ..default()
                 }),
         )
         .add_systems(Startup, (setup_camera, spawn_map))

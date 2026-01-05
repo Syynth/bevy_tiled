@@ -129,45 +129,86 @@ pub fn get_tile_collision_shape(
     // Get the collision object group
     let collision_group = tile.collision.as_ref()?;
 
+    // Tile center (for calculating offsets relative to tile center)
+    // Since we'll be placing colliders at tile centers (via grid_to_world),
+    // collision shape offsets should be relative to tile center, not top-left
+    let tile_center_x = tileset.tile_size.x as f32 / 2.0;
+    let tile_center_y = tileset.tile_size.y as f32 / 2.0;
+
     // Convert each collision object to a collider
     let mut colliders: Vec<(Vec2, f32, Collider)> = Vec::new();
 
     for object in collision_group.object_data() {
         // Convert tiled::ObjectShape to Collider
-        let collider = match &object.shape {
+        // Tiled uses TOP-LEFT anchor for objects, Avian uses CENTER
+        // We calculate offsets relative to TILE CENTER (not tile top-left)
+        let rotation = -object.rotation.to_radians();
+
+        let (collider, offset) = match &object.shape {
             tiled::ObjectShape::Rect { width, height } => {
-                Collider::rectangle(*width, *height)
+                // Rect center in Tiled coords (relative to tile top-left)
+                let shape_center_x = object.x + width / 2.0;
+                let shape_center_y = object.y + height / 2.0;
+
+                // Offset from tile center to shape center
+                // Y is flipped for Bevy's Y-up coordinate system
+                let offset_x = shape_center_x - tile_center_x;
+                let offset_y = -(shape_center_y - tile_center_y);
+
+                (Collider::rectangle(*width, *height), Vec2::new(offset_x, offset_y))
             }
 
             tiled::ObjectShape::Ellipse { width, height } => {
+                // Same as rect - anchor is TOP-LEFT of bounding box
                 let radius = width.max(*height) / 2.0;
-                Collider::circle(radius)
+                let shape_center_x = object.x + width / 2.0;
+                let shape_center_y = object.y + height / 2.0;
+
+                let offset_x = shape_center_x - tile_center_x;
+                let offset_y = -(shape_center_y - tile_center_y);
+
+                (Collider::circle(radius), Vec2::new(offset_x, offset_y))
             }
 
             tiled::ObjectShape::Polygon { points } => {
+                // Polygon vertices are relative to object origin (object.x, object.y)
+                // Offset polygon origin from tile center, then flip Y for Bevy
+                let offset_x = object.x - tile_center_x;
+                let offset_y = -(object.y - tile_center_y);
+
+                // Flip Y for Bevy's Y-up coordinate system
                 let vertices: Vec<Vec2> = points
                     .iter()
-                    .map(|(x, y)| Vec2::new(*x, *y))
+                    .map(|(x, y)| Vec2::new(*x, -*y))
                     .collect();
 
-                if let Some(convex) = Collider::convex_hull(vertices.clone()) {
+                let collider = if let Some(convex) = Collider::convex_hull(vertices.clone()) {
                     convex
                 } else {
                     polygon_to_trimesh(&vertices)
-                }
+                };
+
+                (collider, Vec2::new(offset_x, offset_y))
             }
 
             tiled::ObjectShape::Polyline { points } => {
+                // Same offset logic as polygon
+                let offset_x = object.x - tile_center_x;
+                let offset_y = -(object.y - tile_center_y);
+
                 let vertices: Vec<Vec2> = points
                     .iter()
-                    .map(|(x, y)| Vec2::new(*x, *y))
+                    .map(|(x, y)| Vec2::new(*x, -*y))
                     .collect();
-                Collider::polyline(vertices, None)
+
+                (Collider::polyline(vertices, None), Vec2::new(offset_x, offset_y))
             }
 
             tiled::ObjectShape::Point(x, y) => {
-                // Point shapes become small circles at the given position
-                colliders.push((Vec2::new(*x, *y), 0.0, Collider::circle(1.0)));
+                // Point position relative to tile center
+                let offset_x = *x - tile_center_x;
+                let offset_y = -(*y - tile_center_y);
+                colliders.push((Vec2::new(offset_x, offset_y), rotation, Collider::circle(1.0)));
                 continue;
             }
 
@@ -177,25 +218,106 @@ pub fn get_tile_collision_shape(
             }
         };
 
-        // Add collider with its offset position and rotation
-        let position = Vec2::new(object.x, object.y);
-        let rotation = object.rotation.to_radians();
-        colliders.push((position, rotation, collider));
+        colliders.push((offset, rotation, collider));
     }
 
     // Return the collider(s)
     match colliders.len() {
         0 => None,
         1 => {
-            // Single collider - return it directly (ignoring offset for now)
-            let (_, _, collider) = colliders.into_iter().next().unwrap();
-            Some(collider)
+            let (offset, rotation, collider) = colliders.into_iter().next().unwrap();
+
+            // If offset is zero (or nearly zero), return just the collider
+            // This avoids creating a compound which can't be nested in other compounds
+            if offset.length_squared() < 0.01 && rotation.abs() < 0.01 {
+                Some(collider)
+            } else {
+                // Non-zero offset - must use compound
+                Some(Collider::compound(vec![(offset, rotation, collider)]))
+            }
         }
         _ => {
             // Multiple colliders - create a compound
             Some(Collider::compound(colliders))
         }
     }
+}
+
+/// Get tile collision shapes as individual colliders with offsets.
+///
+/// Unlike `get_tile_collision_shape` which may return a compound collider,
+/// this returns the individual shapes that can be added directly to another compound.
+///
+/// # Arguments
+///
+/// * `tileset` - The tileset asset containing the tile
+/// * `local_tile_id` - The local tile ID (0-based, NOT a GID)
+///
+/// # Returns
+///
+/// Vec of (position, rotation, collider) tuples for each collision shape
+pub fn get_tile_collision_shapes(
+    tileset: &TiledTilesetAsset,
+    local_tile_id: u32,
+) -> Vec<(Vec2, f32, Collider)> {
+    let Some(tile) = tileset.tileset.get_tile(local_tile_id) else {
+        return Vec::new();
+    };
+
+    let Some(collision_group) = tile.collision.as_ref() else {
+        return Vec::new();
+    };
+
+    let tile_center_x = tileset.tile_size.x as f32 / 2.0;
+    let tile_center_y = tileset.tile_size.y as f32 / 2.0;
+
+    let mut colliders = Vec::new();
+
+    for object in collision_group.object_data() {
+        let rotation = -object.rotation.to_radians();
+
+        let (collider, offset) = match &object.shape {
+            tiled::ObjectShape::Rect { width, height } => {
+                let shape_center_x = object.x + width / 2.0;
+                let shape_center_y = object.y + height / 2.0;
+                let offset_x = shape_center_x - tile_center_x;
+                let offset_y = -(shape_center_y - tile_center_y);
+                (Collider::rectangle(*width, *height), Vec2::new(offset_x, offset_y))
+            }
+            tiled::ObjectShape::Ellipse { width, height } => {
+                let radius = width.max(*height) / 2.0;
+                let shape_center_x = object.x + width / 2.0;
+                let shape_center_y = object.y + height / 2.0;
+                let offset_x = shape_center_x - tile_center_x;
+                let offset_y = -(shape_center_y - tile_center_y);
+                (Collider::circle(radius), Vec2::new(offset_x, offset_y))
+            }
+            tiled::ObjectShape::Polygon { points } => {
+                let offset_x = object.x - tile_center_x;
+                let offset_y = -(object.y - tile_center_y);
+                let vertices: Vec<Vec2> = points.iter().map(|(x, y)| Vec2::new(*x, -*y)).collect();
+                let collider = Collider::convex_hull(vertices.clone())
+                    .unwrap_or_else(|| polygon_to_trimesh(&vertices));
+                (collider, Vec2::new(offset_x, offset_y))
+            }
+            tiled::ObjectShape::Polyline { points } => {
+                let offset_x = object.x - tile_center_x;
+                let offset_y = -(object.y - tile_center_y);
+                let vertices: Vec<Vec2> = points.iter().map(|(x, y)| Vec2::new(*x, -*y)).collect();
+                (Collider::polyline(vertices, None), Vec2::new(offset_x, offset_y))
+            }
+            tiled::ObjectShape::Point(x, y) => {
+                let offset_x = *x - tile_center_x;
+                let offset_y = -(*y - tile_center_y);
+                (Collider::circle(1.0), Vec2::new(offset_x, offset_y))
+            }
+            tiled::ObjectShape::Text { .. } => continue,
+        };
+
+        colliders.push((offset, rotation, collider));
+    }
+
+    colliders
 }
 
 /// Check if a tile has collision shapes defined.
@@ -247,7 +369,15 @@ pub fn get_tile_rectangle_collision_size(
         return None;
     }
 
-    match objects[0].shape {
+    let obj = &objects[0];
+
+    // Check that the rect is at the tile origin (within tolerance)
+    // Rects with offsets can't be merged with the simple grid merging algorithm
+    if obj.x.abs() > 0.1 || obj.y.abs() > 0.1 || obj.rotation.abs() > 0.1 {
+        return None;
+    }
+
+    match obj.shape {
         tiled::ObjectShape::Rect { width, height } => Some((width, height)),
         _ => None,
     }

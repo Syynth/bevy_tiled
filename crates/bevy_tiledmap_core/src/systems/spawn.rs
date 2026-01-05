@@ -2,9 +2,9 @@
 
 use bevy::asset::RecursiveDependencyLoadState;
 use bevy::prelude::*;
-use bevy_tiledmap_assets::prelude::{TiledMapAsset, TiledTilesetAsset};
+use bevy_tiledmap_assets::prelude::{TiledMapAsset, TiledTilesetAsset, TiledWorldAsset};
 
-use crate::components::TiledMap;
+use crate::components::{MapsInWorld, TiledMap, TiledWorld, TiledWorldOf};
 use crate::spawn::spawn_map;
 use crate::systems::SpawnContext;
 
@@ -59,7 +59,22 @@ pub fn process_loaded_maps(
             continue;
         };
 
-        info!("Map asset found, spawning map hierarchy");
+        // Get map name from asset path (only if entity doesn't already have a name)
+        let map_name = asset_server
+            .get_path(&tiled_map.handle)
+            .map(|p| {
+                p.path()
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("Map")
+                    .to_string()
+            })
+            .unwrap_or_else(|| "Map".to_string());
+
+        info!("Spawning map hierarchy for '{}'", map_name);
+
+        // Add name to map entity if it doesn't have one
+        commands.entity(map_entity).insert(Name::new(format!("Map: {}", map_name)));
 
         // Create spawn context with asset references
         let context = SpawnContext::new(map_asset, &tileset_assets, &template_assets, &registry);
@@ -71,5 +86,134 @@ pub fn process_loaded_maps(
 
         // Remove RespawnTiledMap marker if present
         commands.entity(map_entity).remove::<RespawnTiledMap>();
+    }
+}
+
+/// Marker component to trigger world respawning.
+///
+/// Add this component to force the world to be respawned even if it hasn't changed.
+#[derive(Component)]
+pub struct RespawnTiledWorld;
+
+/// Reactive system that detects when `TiledWorldAsset` loading completes and spawns map entities.
+///
+/// Runs in `PreUpdate` before user systems.
+///
+/// # Triggers
+///
+/// - `Changed<TiledWorld>` - When world handle is added or changed
+/// - `With<RespawnTiledWorld>` - When manual respawn is requested
+///
+/// # Behavior
+///
+/// For each map in the world, spawns a child entity with `TiledMap` component.
+/// Maps are positioned according to their coordinates in the `.world` file.
+pub fn process_loaded_worlds(
+    asset_server: Res<AssetServer>,
+    world_assets: Res<Assets<TiledWorldAsset>>,
+    mut commands: Commands,
+    mut world_query: Query<
+        (Entity, &TiledWorld),
+        Or<(Without<MapsInWorld>, With<RespawnTiledWorld>)>,
+    >,
+) {
+    for (world_entity, tiled_world) in world_query.iter_mut() {
+        info!("Processing world entity {:?}", world_entity);
+
+        // Check if all dependencies have finished loading
+        let load_state = asset_server.get_recursive_dependency_load_state(&tiled_world.handle);
+        info!(
+            "Load state for world entity {:?}: {:?}",
+            world_entity, load_state
+        );
+
+        let Some(RecursiveDependencyLoadState::Loaded) = load_state else {
+            continue;
+        };
+
+        info!("World dependencies fully loaded, getting world asset");
+
+        // Get the world asset
+        let Some(world_asset) = world_assets.get(&tiled_world.handle) else {
+            warn!("World asset loaded but not found in Assets resource!");
+            continue;
+        };
+
+        // Get world name from asset path
+        let world_name = asset_server
+            .get_path(&tiled_world.handle)
+            .map(|p| {
+                p.path()
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("World")
+                    .to_string()
+            })
+            .unwrap_or_else(|| "World".to_string());
+
+        // Add name to world entity
+        commands.entity(world_entity).insert(Name::new(world_name.clone()));
+
+        info!(
+            "World '{}' found with {} maps, spawning map entities",
+            world_name,
+            world_asset.map_count()
+        );
+
+        // Track spawned map entities for the MapsInWorld component
+        let mut map_entities = Vec::new();
+
+        // Spawn a TiledMap entity for each map in the world
+        for world_map in &world_asset.world.maps {
+            // Get the map handle from the world asset
+            let Some(map_handle) = world_asset.maps.get(&world_map.filename) else {
+                warn!(
+                    "Map '{}' referenced in world but not loaded",
+                    world_map.filename
+                );
+                continue;
+            };
+
+            // Get map name from filename (without extension)
+            let map_name = std::path::Path::new(&world_map.filename)
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or(&world_map.filename)
+                .to_string();
+
+            // Calculate the position from the world map coordinates
+            // Tiled uses top-left origin, so we need to adjust Y coordinate
+            let position = Vec3::new(world_map.x as f32, -(world_map.y as f32), 0.0);
+
+            info!(
+                "Spawning map '{}' at position {:?}",
+                map_name, position
+            );
+
+            // Spawn the map entity as a child of the world
+            let map_entity = commands
+                .spawn((
+                    Name::new(format!("Map: {}", map_name)),
+                    TiledMap {
+                        handle: map_handle.clone(),
+                    },
+                    Transform::from_translation(position),
+                    TiledWorldOf(world_entity),
+                ))
+                .id();
+
+            commands.entity(world_entity).add_child(map_entity);
+            map_entities.push(map_entity);
+        }
+
+        // Add MapsInWorld component to track the spawned maps
+        commands
+            .entity(world_entity)
+            .insert(MapsInWorld(map_entities));
+
+        // Remove RespawnTiledWorld marker if present
+        commands.entity(world_entity).remove::<RespawnTiledWorld>();
+
+        info!("World hierarchy spawned successfully");
     }
 }

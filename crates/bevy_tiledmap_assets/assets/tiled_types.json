@@ -1,0 +1,125 @@
+{
+  "version": "1.10",
+  "propertyTypes": [
+    {
+      "id": 1,
+      "name": "SpawnSettings",
+      "type": "class",
+      "members": [
+        {
+          "name": "spawn_group",
+          "type": "string",
+          "value": ""
+        },
+        {
+          "name": "is_random_spawn",
+          "type": "bool",
+          "value": false
+        },
+        {
+          "name": "random_radius",
+          "type": "float",
+          "value": 0
+        },
+        {
+          "name": "max_spawns",
+          "type": "int",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "name": "GameplaySettings",
+      "type": "class",
+      "members": [
+        {
+          "name": "player_speed",
+          "type": "float",
+          "value": 200
+        },
+        {
+          "name": "jump_height",
+          "type": "float",
+          "value": 100
+        },
+        {
+          "name": "enable_double_jump",
+          "type": "bool",
+          "value": false
+        },
+        {
+          "name": "gravity_scale",
+          "type": "float",
+          "value": 1
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "name": "LootSettings",
+      "type": "class",
+      "members": [
+        {
+          "name": "loot_tier",
+          "type": "string",
+          "propertyType": "LootTier",
+          "value": ""
+        },
+        {
+          "name": "quantity",
+          "type": "int",
+          "value": 1
+        },
+        {
+          "name": "respawn_time",
+          "type": "float",
+          "value": 0
+        },
+        {
+          "name": "value_multiplier",
+          "type": "float",
+          "value": 1
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "name": "EnemySettings",
+      "type": "class",
+      "members": [
+        {
+          "name": "enemy_type",
+          "type": "string",
+          "propertyType": "EnemyType",
+          "value": ""
+        },
+        {
+          "name": "patrol_radius",
+          "type": "float",
+          "value": 100
+        },
+        {
+          "name": "aggro_range",
+          "type": "float",
+          "value": 150
+        },
+        {
+          "name": "health",
+          "type": "int",
+          "value": 10
+        },
+        {
+          "name": "move_speed",
+          "type": "float",
+          "value": 50
+        },
+        {
+          "name": "attack_damage",
+          "type": "int",
+          "value": 1
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<template>
+ <tileset firstgid="1" source="terrains.tsx"/>
+ <object gid="97" width="16" height="16">
+  <properties>
+   <property name="player" type="class" propertytype="Player"/>
+   <property name="player_collider" type="class" propertytype="avian::PhysicsSettings">
+    <properties>
+     <property name="body_type" propertytype="avian::BodyType" value="Dynamic"/>
+     <property name="lock_rotation" type="bool" value="true"/>
+    </properties>
+   </property>
+  </properties>
+ </object>
+</template>

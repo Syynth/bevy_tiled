@@ -9,7 +9,7 @@ pub struct TiledMapAsset {
 
     // ===== BEVY ASSET REFERENCES =====
     /// Tileset handles (Bevy asset system)
-    /// Key: Tileset index in map
+    /// Key: Tileset index (matches LayerTile::tileset_index())
     pub tilesets: HashMap<u32, TilesetReference>,
 
     /// Template handles (Bevy asset system)

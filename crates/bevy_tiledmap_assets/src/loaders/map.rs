@@ -63,19 +63,19 @@ impl AssetLoader for TiledMapAssetLoader {
             let map = loader.load_tmx_map(&full_path)?;
 
             // 3. Load tileset dependencies
-            // In tiled 0.15, first_gid must be calculated
+            // Key by tileset_index (iteration order matches tiled's tileset_index())
             let mut tilesets = HashMap::default();
             let mut current_gid = 1u32; // GIDs start at 1
 
-            for tileset in map.tilesets().iter() {
+            for (tileset_index, tileset) in map.tilesets().iter().enumerate() {
                 // External tileset: load as dependency
                 let tileset_path =
                     resolve_relative_path(load_context, &tileset.source.to_string_lossy())?;
                 let handle: Handle<TiledTilesetAsset> = load_context.load(tileset_path);
 
-                // Use current GID as first_gid
+                // Key by tileset_index for direct lookup from LayerTile::tileset_index()
                 tilesets.insert(
-                    current_gid,
+                    tileset_index as u32,
                     TilesetReference {
                         handle,
                         first_gid: current_gid,

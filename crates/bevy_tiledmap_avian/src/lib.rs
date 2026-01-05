@@ -14,13 +14,13 @@
 //!
 //! ```rust,no_run
 //! use bevy::prelude::*;
-//! use bevy_tiledmap_avian::{BevyTiledAvianPlugin, PhysicsConfig};
+//! use bevy_tiledmap_avian::{TiledmapAvianPlugin, PhysicsConfig};
 //! use avian2d::prelude::*;
 //!
 //! App::new()
 //!     .add_plugins(DefaultPlugins)
 //!     .add_plugins(PhysicsPlugins::default())
-//!     .add_plugins(BevyTiledAvianPlugin::default())
+//!     .add_plugins(TiledmapAvianPlugin::default())
 //!     .run();
 //! ```
 //!
@@ -28,7 +28,7 @@
 //!
 //! ```rust,ignore
 //! use bevy::prelude::*;
-//! use bevy_tiledmap_avian::{BevyTiledAvianPlugin, PhysicsConfig};
+//! use bevy_tiledmap_avian::{TiledmapAvianPlugin, PhysicsConfig};
 //! use avian2d::prelude::*;
 //!
 //! // Define collision groups
@@ -44,7 +44,7 @@
 //! App::new()
 //!     .add_plugins(DefaultPlugins)
 //!     .add_plugins(PhysicsPlugins::default())
-//!     .add_plugins(BevyTiledAvianPlugin::new(
+//!     .add_plugins(TiledmapAvianPlugin::new(
 //!         PhysicsConfig {
 //!             default_friction: 0.3,
 //!             collision_layers_fn: parse_collision_layers,

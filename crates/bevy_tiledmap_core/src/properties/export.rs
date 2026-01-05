@@ -412,69 +412,26 @@ pub fn export_types_to_json(
     let path = output_path.as_ref();
     let mut file = File::create(path)?;
 
-    let types = build_export_data(registry);
-    write_types_to_file(&mut file, &types)?;
+    // Build exports for both classes and enums
+    let mut all_exports = Vec::new();
 
-    Ok(())
-}
+    // Export class types
+    let class_exports = build_export_data(registry);
+    all_exports.extend(class_exports.into_iter().map(TiledTypeOrEnumExport::Type));
 
-/// Write type export data to a file in Tiled's JSON format.
-fn write_types_to_file(file: &mut File, types: &[TiledTypeExport]) -> std::io::Result<()> {
-    // Tiled custom types format
-    // See: https://github.com/mapeditor/tiled/blob/master/docs/reference/json-map-format.rst
-    writeln!(file, "{{")?;
-    writeln!(file, "  \"version\": \"1.10\",")?;
-    writeln!(file, "  \"propertyTypes\": [")?;
+    // Export enum types
+    let enum_exports = build_enum_export_data(registry);
+    all_exports.extend(enum_exports.into_iter().map(TiledTypeOrEnumExport::Enum));
 
-    for (i, type_export) in types.iter().enumerate() {
-        let comma = if i < types.len() - 1 { "," } else { "" };
-
-        writeln!(file, "    {{")?;
-        writeln!(file, "      \"id\": {},", type_export.id)?;
-        writeln!(file, "      \"name\": \"{}\",", type_export.name)?;
-        writeln!(file, "      \"type\": \"class\",")?;
-        writeln!(file, "      \"members\": [")?;
-
-        // Export each field as a member
-        for (field_idx, member) in type_export.members.iter().enumerate() {
-            let field_comma = if field_idx < type_export.members.len() - 1 {
-                ","
-            } else {
-                ""
-            };
-
-            writeln!(file, "        {{")?;
-            writeln!(file, "          \"name\": \"{}\",", member.name)?;
-            writeln!(file, "          \"type\": \"{}\",", member.tiled_type)?;
-
-            // Emit propertyType for class types
-            if let Some(ref property_type) = member.property_type {
-                writeln!(file, "          \"propertyType\": \"{}\",", property_type)?;
-            }
-
-            // Write default value
-            write!(file, "          \"value\": ")?;
-            write_value(&mut *file, &member.value)?;
-            writeln!(file)?;
-
-            write!(file, "        }}{}", field_comma)?;
-            if field_idx < type_export.members.len() - 1 {
-                writeln!(file)?;
-            }
-        }
-
-        writeln!(file)?;
-        writeln!(file, "      ]")?;
-        write!(file, "    }}{}", comma)?;
-
-        if i < types.len() - 1 {
-            writeln!(file)?;
+    // Renumber IDs sequentially
+    for (i, item) in all_exports.iter_mut().enumerate() {
+        match item {
+            TiledTypeOrEnumExport::Type(type_export) => type_export.id = i + 1,
+            TiledTypeOrEnumExport::Enum(enum_export) => enum_export.id = i + 1,
         }
     }
 
-    writeln!(file)?;
-    writeln!(file, "  ]")?;
-    writeln!(file, "}}")?;
+    write_mixed_types_to_file(&mut file, &all_exports)?;
 
     Ok(())
 }
@@ -487,7 +444,7 @@ fn write_value(file: &mut File, value: &TiledValueExport) -> std::io::Result<()>
         TiledValueExport::Float(f) => write!(file, "{}", f),
         TiledValueExport::String(s) => write!(file, "\"{}\"", s),
         TiledValueExport::Color(hex) => write!(file, "\"{}\"", hex),
-        TiledValueExport::ClassDefault => write!(file, "{{}}"),  // Empty object for class types
+        TiledValueExport::ClassDefault => write!(file, "null"),  // null for class types
     }
 }
 
@@ -498,20 +455,23 @@ fn write_mixed_types_to_file(
     file: &mut File,
     items: &[TiledTypeOrEnumExport],
 ) -> std::io::Result<()> {
-    writeln!(file, "{{")?;
-    writeln!(file, "  \"version\": \"1.10\",")?;
-    writeln!(file, "  \"propertyTypes\": [")?;
+    writeln!(file, "[")?;
 
     for (i, item) in items.iter().enumerate() {
         let comma = if i < items.len() - 1 { "," } else { "" };
 
         match item {
             TiledTypeOrEnumExport::Type(type_export) => {
-                writeln!(file, "    {{")?;
-                writeln!(file, "      \"id\": {},", type_export.id)?;
-                writeln!(file, "      \"name\": \"{}\",", type_export.name)?;
-                writeln!(file, "      \"type\": \"class\",")?;
-                writeln!(file, "      \"members\": [")?;
+                writeln!(file, "  {{")?;
+                writeln!(file, "    \"id\": {},", type_export.id)?;
+                writeln!(file, "    \"name\": \"{}\",", type_export.name)?;
+                writeln!(file, "    \"type\": \"class\",")?;
+                writeln!(file, "    \"useAs\": [")?;
+                writeln!(file, "      \"property\"")?;
+                writeln!(file, "    ],")?;
+                writeln!(file, "    \"color\": \"#000000\",")?;
+                writeln!(file, "    \"drawFill\": true,")?;
+                writeln!(file, "    \"members\": [")?;
 
                 // Export each field as a member
                 for (field_idx, member) in type_export.members.iter().enumerate() {
@@ -521,36 +481,38 @@ fn write_mixed_types_to_file(
                         ""
                     };
 
-                    writeln!(file, "        {{")?;
-                    writeln!(file, "          \"name\": \"{}\",", member.name)?;
-                    writeln!(file, "          \"type\": \"{}\",", member.tiled_type)?;
+                    writeln!(file, "      {{")?;
+                    writeln!(file, "        \"name\": \"{}\",", member.name)?;
 
-                    // Emit propertyType for class types
+                    // Emit propertyType for class types (before type)
                     if let Some(ref property_type) = member.property_type {
-                        writeln!(file, "          \"propertyType\": \"{}\",", property_type)?;
+                        writeln!(file, "        \"propertyType\": \"{}\",", property_type)?;
                     }
 
+                    writeln!(file, "        \"type\": \"{}\",", member.tiled_type)?;
+
                     // Write default value
-                    write!(file, "          \"value\": ")?;
+                    write!(file, "        \"value\": ")?;
                     write_value(&mut *file, &member.value)?;
                     writeln!(file)?;
 
-                    write!(file, "        }}{}", field_comma)?;
+                    write!(file, "      }}{}", field_comma)?;
                     if field_idx < type_export.members.len() - 1 {
                         writeln!(file)?;
                     }
                 }
 
                 writeln!(file)?;
-                writeln!(file, "      ]")?;
-                write!(file, "    }}{}", comma)?;
+                writeln!(file, "    ]")?;
+                write!(file, "  }}{}", comma)?;
             }
             TiledTypeOrEnumExport::Enum(enum_export) => {
-                writeln!(file, "    {{")?;
-                writeln!(file, "      \"id\": {},", enum_export.id)?;
-                writeln!(file, "      \"name\": \"{}\",", enum_export.name)?;
-                writeln!(file, "      \"type\": \"enum\",")?;
-                writeln!(file, "      \"values\": [")?;
+                writeln!(file, "  {{")?;
+                writeln!(file, "    \"id\": {},", enum_export.id)?;
+                writeln!(file, "    \"name\": \"{}\",", enum_export.name)?;
+                writeln!(file, "    \"type\": \"enum\",")?;
+                writeln!(file, "    \"storageType\": \"string\",")?;
+                writeln!(file, "    \"values\": [")?;
 
                 for (value_idx, variant) in enum_export.values.iter().enumerate() {
                     let value_comma = if value_idx < enum_export.values.len() - 1 {
@@ -558,20 +520,20 @@ fn write_mixed_types_to_file(
                     } else {
                         ""
                     };
-                    writeln!(file, "        \"{}\"{}",  variant, value_comma)?;
+                    writeln!(file, "      \"{}\"{}",  variant, value_comma)?;
                 }
 
-                writeln!(file, "      ],")?;
+                writeln!(file, "    ],")?;
                 writeln!(
                     file,
-                    "      \"valuesAsFlags\": {}",
+                    "    \"valuesAsFlags\": {}",
                     if enum_export.values_as_flags {
                         "true"
                     } else {
                         "false"
                     }
                 )?;
-                write!(file, "    }}{}", comma)?;
+                write!(file, "  }}{}", comma)?;
             }
         }
 
@@ -581,8 +543,7 @@ fn write_mixed_types_to_file(
     }
 
     writeln!(file)?;
-    writeln!(file, "  ]")?;
-    writeln!(file, "}}")?;
+    writeln!(file, "]")?;
 
     Ok(())
 }

@@ -1,6 +1,11 @@
+[package]
+name = "bevy_tiledmap"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
 [workspace]
 members = [
-    "crates/bevy_tiledmap",        # Root meta-crate
     "crates/bevy_tiledmap_assets",
     "crates/bevy_tiledmap_avian",
     "crates/bevy_tiledmap_core",
@@ -14,6 +19,44 @@ resolver = "3"
 version = "0.0.1"
 edition = "2024"
 authors = ["syynth.dev"]
+
+[features]
+default = ["tilemap", "avian"]
+
+# Layer 3 integrations (optional)
+tilemap = ["dep:bevy_tiledmap_tilemap"]
+avian = ["dep:bevy_tiledmap_avian"]
+native = ["dep:bevy_tiledmap_native"]
+
+[dependencies]
+# Core dependencies (always included)
+bevy_tiledmap_assets = { path = "crates/bevy_tiledmap_assets", version = "0.0.1" }
+bevy_tiledmap_core = { path = "crates/bevy_tiledmap_core", version = "0.1.0" }
+
+# Layer 3 integrations (feature-gated)
+bevy_tiledmap_tilemap = { path = "crates/bevy_tiledmap_tilemap", version = "0.1.0", optional = true }
+bevy_tiledmap_avian = { path = "crates/bevy_tiledmap_avian", version = "0.1.0", optional = true }
+bevy_tiledmap_native = { path = "crates/bevy_tiledmap_native", version = "0.1.0", optional = true }
+
+# Bevy (required)
+bevy = { version = "0.17", default-features = false }
+
+[dev-dependencies]
+# For examples - use full Bevy with default features
+bevy = { version = "0.17" }
+
+# For examples that use physics
+avian2d = "0.4"
+
+# For examples that use TiledClass macro
+inventory = "0.3"
+tiled = "0.15"
+
+# Inspector for debugging
+bevy-inspector-egui = "0.35"
+
+[lints]
+workspace = true
 
 [workspace.lints.clippy]
 too_many_arguments = "allow"

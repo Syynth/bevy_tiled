@@ -55,17 +55,15 @@ fn derive_tiled_class_impl(input: DeriveInput) -> syn::Result<TokenStream> {
     // Handle structs or enums
     match &input.data {
         Data::Struct(data) => {
-            // Handle struct
-            let fields = match &data.fields {
-                Fields::Named(fields) => &fields.named,
-                _ => {
-                    return Err(syn::Error::new_spanned(
-                        type_name,
-                        "TiledClass only supports structs with named fields",
-                    ));
-                }
-            };
-            handle_struct(type_name, &tiled_name, fields)
+            // Handle struct (including unit structs)
+            match &data.fields {
+                Fields::Named(fields) => handle_struct(type_name, &tiled_name, &fields.named),
+                Fields::Unit => handle_unit_struct(type_name, &tiled_name),
+                Fields::Unnamed(_) => Err(syn::Error::new_spanned(
+                    type_name,
+                    "TiledClass does not support tuple structs",
+                )),
+            }
         }
         Data::Enum(data) => {
             // Handle enum
@@ -182,6 +180,40 @@ fn handle_struct(
     Ok(expanded.into())
 }
 
+/// Handle unit struct (no fields) - used as marker components
+fn handle_unit_struct(struct_name: &syn::Ident, tiled_name: &str) -> syn::Result<TokenStream> {
+    // Generate static field metadata array (empty for unit structs)
+    let fields_array_name =
+        quote::format_ident!("__TILED_FIELDS_{}", struct_name.to_string().to_uppercase());
+
+    let expanded = quote! {
+        // Static array of field metadata (empty for unit struct)
+        #[doc(hidden)]
+        static #fields_array_name: &[bevy_tiledmap_core::properties::TiledFieldInfo] = &[];
+
+        // Submit to inventory for compile-time registration
+        ::inventory::submit! {
+            bevy_tiledmap_core::properties::TiledClassInfo {
+                type_id: ::std::any::TypeId::of::<#struct_name>(),
+                name: #tiled_name,
+                fields: #fields_array_name,
+                from_properties: #struct_name::__tiled_from_properties,
+            }
+        }
+
+        impl #struct_name {
+            #[doc(hidden)]
+            fn __tiled_from_properties(
+                _properties: &::tiled::Properties,
+            ) -> ::std::result::Result<::std::boxed::Box<dyn ::bevy::reflect::Reflect>, ::std::string::String> {
+                Ok(::std::boxed::Box::new(Self))
+            }
+        }
+    };
+
+    Ok(expanded.into())
+}
+
 fn handle_enum(
     enum_name: &syn::Ident,
     tiled_name: &str,
@@ -272,7 +304,9 @@ fn analyze_enum_variants(variants: &Punctuated<Variant, Comma>) -> syn::Result<E
 }
 
 /// Analyze enum variants in detail, extracting field metadata and default markers
-fn analyze_enum_variants_detailed(variants: &Punctuated<Variant, Comma>) -> syn::Result<EnumAnalysis> {
+fn analyze_enum_variants_detailed(
+    variants: &Punctuated<Variant, Comma>,
+) -> syn::Result<EnumAnalysis> {
     let mut analyzed_variants = Vec::new();
 
     for variant in variants {
@@ -280,7 +314,10 @@ fn analyze_enum_variants_detailed(variants: &Punctuated<Variant, Comma>) -> syn:
         let name = ident.to_string();
 
         // Check for #[default] attribute
-        let is_default = variant.attrs.iter().any(|attr| attr.path().is_ident("default"));
+        let is_default = variant
+            .attrs
+            .iter()
+            .any(|attr| attr.path().is_ident("default"));
 
         // Analyze variant fields
         let fields = match &variant.fields {
@@ -350,10 +387,7 @@ fn generate_unit_enum_impl(
     variants: &Punctuated<Variant, Comma>,
 ) -> syn::Result<TokenStream> {
     // Extract variant names
-    let variant_names: Vec<String> = variants
-        .iter()
-        .map(|v| v.ident.to_string())
-        .collect();
+    let variant_names: Vec<String> = variants.iter().map(|v| v.ident.to_string()).collect();
 
     // Generate match arms for string → enum conversion
     let variant_match_arms: Vec<_> = variants
@@ -380,8 +414,10 @@ fn generate_unit_enum_impl(
         .collect();
 
     // Generate static variants array name
-    let variants_array_name =
-        quote::format_ident!("__TILED_ENUM_VARIANTS_{}", enum_name.to_string().to_uppercase());
+    let variants_array_name = quote::format_ident!(
+        "__TILED_ENUM_VARIANTS_{}",
+        enum_name.to_string().to_uppercase()
+    );
 
     let expanded = quote! {
         // Static array of variant names
@@ -453,7 +489,8 @@ fn generate_complex_enum_impl(
     let variant_metadata_arrays = generate_variant_metadata_arrays(enum_name, &analysis.variants)?;
 
     // Generate FromTiledProperty implementation
-    let from_property_impl = generate_complex_from_property_impl(enum_name, tiled_name, &analysis.variants)?;
+    let from_property_impl =
+        generate_complex_from_property_impl(enum_name, tiled_name, &analysis.variants)?;
 
     // Generate TiledVariantInfo array
     let variant_info_array = generate_variant_info_array(enum_name, &analysis.variants)?;
@@ -601,8 +638,9 @@ fn generate_variant_metadata_arrays(
             );
 
             let field_entries = match fields {
-                VariantFields::Named(named_fields) => {
-                    named_fields.iter().map(|field| {
+                VariantFields::Named(named_fields) => named_fields
+                    .iter()
+                    .map(|field| {
                         let field_name = field.ident.to_string();
                         let tiled_type = map_rust_type_to_tiled(&field.ty);
                         let default_value = generate_type_default(&field.ty)?;
@@ -614,10 +652,11 @@ fn generate_variant_metadata_arrays(
                                 default_value: #default_value,
                             }
                         })
-                    }).collect::<syn::Result<Vec<_>>>()?
-                }
-                VariantFields::Unnamed(unnamed_fields) => {
-                    unnamed_fields.iter().map(|field| {
+                    })
+                    .collect::<syn::Result<Vec<_>>>()?,
+                VariantFields::Unnamed(unnamed_fields) => unnamed_fields
+                    .iter()
+                    .map(|field| {
                         let field_name = field.index.to_string();
                         let tiled_type = map_rust_type_to_tiled(&field.ty);
                         let default_value = generate_type_default(&field.ty)?;
@@ -629,8 +668,8 @@ fn generate_variant_metadata_arrays(
                                 default_value: #default_value,
                             }
                         })
-                    }).collect::<syn::Result<Vec<_>>>()?
-                }
+                    })
+                    .collect::<syn::Result<Vec<_>>>()?,
             };
 
             arrays.push(quote! {
@@ -652,7 +691,10 @@ fn generate_variant_info_array(
     enum_name: &syn::Ident,
     variants: &[VariantAnalysis],
 ) -> syn::Result<proc_macro2::TokenStream> {
-    let _array_name = format_ident!("__TILED_ENUM_VARIANTS_{}", enum_name.to_string().to_uppercase());
+    let _array_name = format_ident!(
+        "__TILED_ENUM_VARIANTS_{}",
+        enum_name.to_string().to_uppercase()
+    );
 
     let variant_entries: Vec<_> = variants
         .iter()

@@ -1536,12 +1536,16 @@ dependencies = [
 name = "bevy_tiledmap"
 version = "0.0.1"
 dependencies = [
+ "avian2d",
  "bevy",
+ "bevy-inspector-egui",
  "bevy_tiledmap_assets",
  "bevy_tiledmap_avian",
  "bevy_tiledmap_core",
  "bevy_tiledmap_native",
  "bevy_tiledmap_tilemap",
+ "inventory",
+ "tiled",
 ]
 
 [[package]]

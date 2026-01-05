@@ -2,6 +2,7 @@
 
 use avian2d::prelude::*;
 use bevy::prelude::*;
+use bevy_tiledmap_assets::prelude::TiledTilesetAsset;
 use bevy_tiledmap_core::components::object::TiledObject;
 use bevy_tiledmap_core::events::ObjectSpawned;
 use bevy_tiledmap_core::properties::registry::TiledClassRegistry;
@@ -41,6 +42,7 @@ use crate::shapes;
 pub fn on_object_spawned(
     trigger: On<ObjectSpawned>,
     object_query: Query<&TiledObject>,
+    tileset_assets: Res<Assets<TiledTilesetAsset>>,
     registry: Res<TiledClassRegistry>,
     type_registry: Res<AppTypeRegistry>,
     config: Res<PhysicsConfig>,
@@ -52,23 +54,60 @@ pub fn on_object_spawned(
         return;
     };
 
-    // Step 1: Check for physics_settings property (opt-in filtering)
-    // Objects ONLY get colliders if they have this property
-    let Some(physics_settings) =
-        resolve_physics_settings(&event.properties, &registry, &type_registry)
-    else {
-        // No physics_settings property = no collider
-        return;
-    };
+    // Step 1: Resolve physics_settings and collider based on object type
+    let (physics_settings, collider) = match object {
+        TiledObject::Tile {
+            tile_id,
+            tileset_handle,
+            width,
+            height,
+        } => {
+            // For tile objects, merge properties from multiple sources:
+            // 1. Tile properties (from tileset) - base for all objects in the tile
+            // 2. Collision object properties (from tileset) - per-object override
+            // 3. Tile object properties (from map) - instance-level override
+            let Some(tileset) = tileset_assets.get(tileset_handle) else {
+                return;
+            };
 
-    // Step 2: Create collider from object shape
-    let Some(collider) = shapes::object_to_collider(object) else {
-        // Text objects and other unsupported shapes are skipped
-        warn!(
-            "Object {} has physics_settings but unsupported shape, skipping",
-            event.object_id
-        );
-        return;
+            // Get collision shape and collision object properties
+            let (collider, collision_props) =
+                get_tile_collision_with_properties(tileset, *tile_id, *width, *height);
+
+            // Merge properties: tile props (base) → collision props → object props (override)
+            let merged_props = merge_tile_object_properties(
+                tileset.tile_properties.get(tile_id), // base
+                collision_props,                       // per-collision-object
+                &event.properties,                     // instance override
+            );
+
+            // Resolve physics_settings from merged properties
+            let Some(physics_settings) =
+                resolve_physics_settings(&merged_props, &registry, &type_registry)
+            else {
+                return;
+            };
+
+            (physics_settings, collider)
+        }
+        _ => {
+            // Non-tile objects: use object properties directly
+            let Some(physics_settings) =
+                resolve_physics_settings(&event.properties, &registry, &type_registry)
+            else {
+                return;
+            };
+
+            let Some(collider) = shapes::object_to_collider(object) else {
+                warn!(
+                    "Object {} has physics_settings but unsupported shape, skipping",
+                    event.object_id
+                );
+                return;
+            };
+
+            (physics_settings, collider)
+        }
     };
 
     // Step 3: Convert collision groups/mask to CollisionLayers via user callback
@@ -122,8 +161,8 @@ pub fn on_object_spawned(
 
 /// Resolve `PhysicsSettings` from object properties.
 ///
-/// Returns `Some(PhysicsSettings)` if the object has a `physics_settings` property
-/// with type `avian::PhysicsSettings`, otherwise `None`.
+/// Scans all properties for any with type `avian::PhysicsSettings`.
+/// The property can have any name (e.g., "physics_settings", "collider", etc.)
 ///
 /// This implements the opt-in filtering - only objects with this property get colliders.
 fn resolve_physics_settings(
@@ -131,27 +170,19 @@ fn resolve_physics_settings(
     registry: &TiledClassRegistry,
     type_registry: &AppTypeRegistry,
 ) -> Option<PhysicsSettings> {
-    // Look for physics_settings property
-    let property_value = properties.get("physics_settings")?;
-
-    // It must be a ClassValue
-    let PropertyValue::ClassValue {
-        property_type,
-        properties: class_props,
-    } = property_value
-    else {
-        warn!("physics_settings property is not a ClassValue, ignoring");
-        return None;
-    };
-
-    // Verify it's the correct type
-    if property_type != "avian::PhysicsSettings" {
-        warn!(
-            "physics_settings has wrong type '{}', expected 'avian::PhysicsSettings'",
-            property_type
-        );
-        return None;
-    }
+    // Scan all properties for one with type avian::PhysicsSettings
+    let class_props = properties.iter().find_map(|(_key, value)| {
+        if let PropertyValue::ClassValue {
+            property_type,
+            properties: class_props,
+        } = value
+        {
+            if property_type == "avian::PhysicsSettings" {
+                return Some(class_props);
+            }
+        }
+        None
+    })?;
 
     // Get the TiledClassInfo for PhysicsSettings
     let class_info = registry.get("avian::PhysicsSettings")?;
@@ -176,4 +207,74 @@ fn resolve_physics_settings(
             None
         }
     }
+}
+
+/// Get tile collision shape and the collision object's properties.
+///
+/// Returns the collider and cloned properties from the first collision object in the tile.
+/// If no collision shapes exist, returns a rectangle fallback and None.
+fn get_tile_collision_with_properties(
+    tileset: &TiledTilesetAsset,
+    tile_id: u32,
+    width: f32,
+    height: f32,
+) -> (Collider, Option<tiled::Properties>) {
+    // Try to get tile collision data
+    let Some(tile) = tileset.tileset.get_tile(tile_id) else {
+        return (Collider::rectangle(width, height), None);
+    };
+
+    let Some(collision) = tile.collision.as_ref() else {
+        return (Collider::rectangle(width, height), None);
+    };
+
+    let objects = collision.object_data();
+    if objects.is_empty() {
+        return (Collider::rectangle(width, height), None);
+    }
+
+    // Clone properties from first collision object (for single-shape tiles)
+    // TODO: For compound shapes, consider merging properties from all objects
+    let first_object_props = Some(objects[0].properties.clone());
+
+    // Get the collider using existing shape logic
+    let collider = shapes::get_tile_collision_shape(tileset, tile_id)
+        .unwrap_or_else(|| Collider::rectangle(width, height));
+
+    (collider, first_object_props)
+}
+
+/// Merge properties from multiple sources for tile objects.
+///
+/// Properties are merged with later sources overriding earlier:
+/// 1. Tile properties (base for all objects in the tile)
+/// 2. Collision object properties (per-object override)
+/// 3. Tile object properties (instance-level override)
+fn merge_tile_object_properties(
+    tile_props: Option<&tiled::Properties>,
+    collision_props: Option<tiled::Properties>,
+    object_props: &tiled::Properties,
+) -> tiled::Properties {
+    let mut merged = tiled::Properties::default();
+
+    // Apply tile properties first (base)
+    if let Some(props) = tile_props {
+        for (key, value) in props.iter() {
+            merged.insert(key.clone(), value.clone());
+        }
+    }
+
+    // Apply collision object properties (override)
+    if let Some(props) = collision_props {
+        for (key, value) in props.iter() {
+            merged.insert(key.clone(), value.clone());
+        }
+    }
+
+    // Apply tile object properties (highest priority)
+    for (key, value) in object_props.iter() {
+        merged.insert(key.clone(), value.clone());
+    }
+
+    merged
 }

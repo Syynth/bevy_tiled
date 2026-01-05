@@ -1,0 +1,95 @@
+[
+  {
+    "id": 1,
+    "name": "Player",
+    "type": "class",
+    "useAs": [
+      "property"
+    ],
+    "color": "#000000",
+    "drawFill": true,
+    "members": [
+
+    ]
+  },
+  {
+    "id": 2,
+    "name": "avian::PhysicsSettings",
+    "type": "class",
+    "useAs": [
+      "property"
+    ],
+    "color": "#000000",
+    "drawFill": true,
+    "members": [
+      {
+        "name": "body_type",
+        "propertyType": "avian::BodyType",
+        "type": "string",
+        "value": ""
+      },
+      {
+        "name": "friction",
+        "type": "float",
+        "value": 0.5
+      },
+      {
+        "name": "restitution",
+        "type": "float",
+        "value": 0
+      },
+      {
+        "name": "density",
+        "type": "float",
+        "value": 1
+      },
+      {
+        "name": "collision_groups",
+        "type": "string",
+        "value": ""
+      },
+      {
+        "name": "collision_mask",
+        "type": "string",
+        "value": ""
+      },
+      {
+        "name": "is_sensor",
+        "type": "bool",
+        "value": false
+      },
+      {
+        "name": "linear_damping",
+        "type": "float",
+        "value": 0
+      },
+      {
+        "name": "angular_damping",
+        "type": "float",
+        "value": 0
+      },
+      {
+        "name": "gravity_scale",
+        "type": "float",
+        "value": 0
+      },
+      {
+        "name": "lock_rotation",
+        "type": "bool",
+        "value": false
+      }
+    ]
+  },
+  {
+    "id": 3,
+    "name": "avian::BodyType",
+    "type": "enum",
+    "storageType": "string",
+    "values": [
+      "Static",
+      "Dynamic",
+      "Kinematic"
+    ],
+    "valuesAsFlags": false
+  }
+]

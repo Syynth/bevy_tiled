@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use bevy::prelude::*;
 
 use crate::properties::{TiledClassRegistry, export_types_to_json};
-use crate::systems::process_loaded_maps;
+use crate::systems::{process_loaded_maps, process_loaded_worlds};
 
 /// Configuration for `TiledmapCorePlugin`.
 ///
@@ -99,7 +99,11 @@ impl Plugin for TiledmapCorePlugin {
         // Insert registry as a resource
         app.insert_resource(registry);
 
-        // Add reactive spawning system (runs in PreUpdate before user systems)
-        app.add_systems(PreUpdate, process_loaded_maps);
+        // Add reactive spawning systems (runs in PreUpdate before user systems)
+        // World processing runs before map processing so spawned maps get processed in the same frame
+        app.add_systems(
+            PreUpdate,
+            (process_loaded_worlds, process_loaded_maps).chain(),
+        );
     }
 }

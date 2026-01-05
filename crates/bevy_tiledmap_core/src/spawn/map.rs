@@ -2,7 +2,7 @@
 
 use bevy::prelude::*;
 
-use crate::components::LayersInMap;
+use crate::components::{LayersInMap, MapGeometry};
 use crate::spawn::spawn_layer;
 use crate::systems::SpawnContext;
 
@@ -34,9 +34,21 @@ pub fn spawn_map(
         layer_entities.push(layer_entity);
     }
 
-    // Add LayersInMap component and set up parent-child hierarchy
+    // Create MapGeometry for world-space boundary and coordinate conversion
+    let map = &context.map_asset.map;
+    let map_geometry = MapGeometry::new(
+        map.width,
+        map.height,
+        map.tile_width as f32,
+        map.tile_height as f32,
+    );
+
+    // Add components and set up parent-child hierarchy
     commands
         .entity(map_entity)
-        .insert(LayersInMap(layer_entities.clone()))
+        .insert((
+            LayersInMap(layer_entities.clone()),
+            map_geometry,
+        ))
         .add_children(&layer_entities);
 }

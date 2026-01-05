@@ -1,4 +1,4 @@
-//! Unified plugin for bevy_tiledmap.
+//! Unified plugin for `bevy_tiledmap`.
 
 use bevy::prelude::*;
 
@@ -14,7 +14,7 @@ use bevy_tiledmap_avian::{PhysicsConfig, TiledmapAvianPlugin};
 #[cfg(feature = "native")]
 use bevy_tiledmap_native::TiledmapNativePlugin;
 
-/// Unified plugin that adds all enabled bevy_tiledmap functionality.
+/// Unified plugin that adds all enabled `bevy_tiledmap` functionality.
 ///
 /// This plugin automatically includes:
 /// - Asset loading ([`TiledmapAssetsPlugin`])
@@ -23,8 +23,8 @@ use bevy_tiledmap_native::TiledmapNativePlugin;
 ///
 /// # Features
 ///
-/// - `tilemap` (default): Adds [`TilemapPlugin`] for rendering with bevy_ecs_tilemap
-/// - `avian`: Adds [`TiledmapAvianPlugin`] for Avian2D physics integration
+/// - `tilemap` (default): Adds [`TilemapPlugin`] for rendering with `bevy_ecs_tilemap`
+/// - `avian`: Adds [`TiledmapAvianPlugin`] for `Avian2D` physics integration
 /// - `native`: Adds [`TiledmapNativePlugin`] (placeholder for future Bevy native tilemap)
 ///
 /// # Example

@@ -1,5 +1,6 @@
 //! Tile layer spawning.
 
+use bevy::prelude::*;
 use tiled::LayerType;
 
 use crate::components::tile::{TileInstance, TileLayerData};
@@ -7,12 +8,12 @@ use crate::systems::SpawnContext;
 
 /// Build `TileLayerData` component from a tile layer.
 ///
-/// Pre-processes all tiles: resolves GIDs, extracts flip flags, looks up tilesets.
+/// Pre-processes all tiles: looks up tilesets by index, extracts flip flags.
 ///
 /// # Arguments
 ///
 /// * `layer` - The tile layer from the map asset
-/// * `context` - Spawn context for GID resolution
+/// * `context` - Spawn context for tileset lookup
 ///
 /// # Returns
 ///
@@ -35,25 +36,28 @@ pub fn build_tile_layer_data(
     for y in 0..height {
         for x in 0..width {
             if let Some(tile) = tile_layer.get_tile(x as i32, y as i32) {
-                let gid = tile.id();
+                // Get local tile ID directly from the tile (already resolved by tiled crate)
+                let tile_id = tile.id();
 
-                // Skip empty tiles (GID 0)
-                if gid == 0 {
-                    continue;
-                }
-
-                // Resolve GID to tileset + local tile ID
-                let Some((tileset_handle, tile_id)) = context.resolve_gid(gid) else {
+                // Get tileset by index (matches our HashMap key)
+                let tileset_index = tile.tileset_index();
+                let Some(tileset_ref) = context.get_tileset_by_index(tileset_index as u32) else {
+                    warn!(
+                        "Tile at ({}, {}) references tileset index {} which doesn't exist",
+                        x, y, tileset_index
+                    );
                     continue;
                 };
 
-                // Extract flip flags
-                let (flipped_h, flipped_v, flipped_d) = SpawnContext::extract_flip_flags(gid);
+                // Get flip flags directly from the tile
+                let flipped_h = tile.flip_h;
+                let flipped_v = tile.flip_v;
+                let flipped_d = tile.flip_d;
 
-                // Create tile instance
+                // Create tile instance with local tile ID
                 let tile_instance = TileInstance {
-                    gid,
-                    tileset_handle,
+                    gid: tile_id, // Store local ID (we don't need GID anymore)
+                    tileset_handle: tileset_ref.handle.clone(),
                     tile_id,
                     flipped_h,
                     flipped_v,

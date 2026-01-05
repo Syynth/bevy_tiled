@@ -1,0 +1,106 @@
+{
+    "automappingRulesFile": "",
+    "commands": [
+    ],
+    "compatibilityVersion": 1100,
+    "extensionsPath": "extensions",
+    "folders": [
+        "."
+    ],
+    "properties": [
+    ],
+    "propertyTypes": [
+        {
+            "color": "#ff000000",
+            "drawFill": true,
+            "id": 7,
+            "members": [
+                {
+                    "name": "angular_damping",
+                    "type": "float",
+                    "value": 0
+                },
+                {
+                    "name": "body_type",
+                    "propertyType": "avian::BodyType",
+                    "type": "string",
+                    "value": ""
+                },
+                {
+                    "name": "collision_groups",
+                    "type": "string",
+                    "value": ""
+                },
+                {
+                    "name": "collision_mask",
+                    "type": "string",
+                    "value": ""
+                },
+                {
+                    "name": "density",
+                    "type": "float",
+                    "value": 1
+                },
+                {
+                    "name": "friction",
+                    "type": "float",
+                    "value": 0.5
+                },
+                {
+                    "name": "gravity_scale",
+                    "type": "float",
+                    "value": 0
+                },
+                {
+                    "name": "is_sensor",
+                    "type": "bool",
+                    "value": false
+                },
+                {
+                    "name": "linear_damping",
+                    "type": "float",
+                    "value": 0
+                },
+                {
+                    "name": "lock_rotation",
+                    "type": "bool",
+                    "value": false
+                },
+                {
+                    "name": "restitution",
+                    "type": "float",
+                    "value": 0
+                }
+            ],
+            "name": "avian::PhysicsSettings",
+            "type": "class",
+            "useAs": [
+                "property"
+            ]
+        },
+        {
+            "id": 8,
+            "name": "avian::BodyType",
+            "storageType": "string",
+            "type": "enum",
+            "values": [
+                "Static",
+                "Dynamic",
+                "Kinematic"
+            ],
+            "valuesAsFlags": false
+        },
+        {
+            "color": "#ff000000",
+            "drawFill": true,
+            "id": 9,
+            "members": [
+            ],
+            "name": "Player",
+            "type": "class",
+            "useAs": [
+                "property"
+            ]
+        }
+    ]
+}

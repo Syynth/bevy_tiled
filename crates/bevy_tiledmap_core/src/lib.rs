@@ -59,7 +59,8 @@ pub mod prelude {
     //! Common imports for `bevy_tiledmap_core` users.
 
     pub use crate::components::{
-        LayerId, ObjectId, TiledLayer, TiledLayerMapOf, TiledMap, TiledObject, TiledObjectMapOf,
+        LayerId, MapGeometry, ObjectId, TiledLayer, TiledLayerMapOf, TiledMap, TiledObject,
+        TiledObjectMapOf, TiledWorld,
     };
     pub use crate::events::{
         GroupLayerSpawned, ImageLayerSpawned, ObjectLayerSpawned, ObjectSpawned,

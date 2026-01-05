@@ -123,7 +123,7 @@ impl TilemapBuilder {
             Self::create_atlas_tilemap(commands, layer_entity, tiles, tileset, tileset_handle, width, height);
         } else {
             // Use simple sprites for image collection tilesets
-            Self::create_image_collection_tilemap(commands, layer_entity, tiles, tileset);
+            Self::create_image_collection_tilemap(commands, layer_entity, tiles, tileset, height);
         }
     }
 
@@ -133,6 +133,7 @@ impl TilemapBuilder {
         layer_entity: Entity,
         tiles: Vec<(u32, u32, TileInstance)>,
         tileset: &TiledTilesetAsset,
+        height: u32,
     ) {
         let tile_size = tileset.tile_size;
         let tile_count = tiles.len();
@@ -145,9 +146,11 @@ impl TilemapBuilder {
             };
 
             // Calculate world position for this tile
-            // Tiled uses top-left origin, Bevy uses center origin
+            // Positive Y coordinate system (origin at bottom-left, Y increases upward)
+            // Flip Y: Tiled y=0 is top, Bevy y=0 is bottom
+            let flipped_y = height - 1 - y;
             let world_x = (x as f32 * tile_size.x as f32) + (tile_size.x as f32 / 2.0);
-            let world_y = -((y as f32 * tile_size.y as f32) + (tile_size.y as f32 / 2.0));
+            let world_y = (flipped_y as f32 * tile_size.y as f32) + (tile_size.y as f32 / 2.0);
 
             // Spawn a sprite for this tile
             let mut sprite_bundle = Sprite {
@@ -212,14 +215,25 @@ impl TilemapBuilder {
         // Capture count before consuming the vector
         let tile_count = tiles.len();
 
-        // Spawn individual tiles
+        // Spawn empty tilemap entity first (following bevy_ecs_tilemap pattern)
+        let tilemap_entity = commands.spawn_empty().id();
+
+        // Make tilemap a child of layer entity
+        commands.entity(layer_entity).add_child(tilemap_entity);
+
+        // Collect tile entities to parent them to the tilemap
+        let mut tile_entities = Vec::with_capacity(tiles.len());
+
+        // Spawn individual tiles with correct TilemapId
+        // Flip Y coordinate: Tiled has (0,0) at top-left, bevy_ecs_tilemap at bottom-left
         for (x, y, tile_instance) in tiles {
-            let tile_pos = TilePos { x, y };
+            let flipped_y = height - 1 - y;
+            let tile_pos = TilePos { x, y: flipped_y };
 
             let mut entity_commands = commands.spawn(TileBundle {
                 position: tile_pos,
                 texture_index: TileTextureIndex(tile_instance.tile_id),
-                tilemap_id: TilemapId(layer_entity),
+                tilemap_id: TilemapId(tilemap_entity),
                 flip: TileFlip {
                     x: tile_instance.flipped_h,
                     y: tile_instance.flipped_v,
@@ -236,25 +250,29 @@ impl TilemapBuilder {
 
             let tile_entity = entity_commands.id();
             tile_storage.set(&tile_pos, tile_entity);
+            tile_entities.push(tile_entity);
         }
 
-        // Spawn tilemap as child of layer entity
-        let texture = TilemapTexture::Single(atlas_image.clone());
+        // Parent all tile entities to the tilemap for hierarchy organization
+        commands.entity(tilemap_entity).add_children(&tile_entities);
 
-        commands.entity(layer_entity).with_children(|parent| {
-            parent
-                .spawn(TilemapBundle {
-                    grid_size,
-                    size: map_size,
-                    storage: tile_storage,
-                    texture,
-                    tile_size,
-                    map_type: TilemapType::Square,
-                    transform: Transform::from_xyz(0.0, 0.0, 0.0),
-                    ..default()
-                })
-                .insert(TilesetReference(tileset_handle));
-        });
+        // Now insert the TilemapBundle with populated storage
+        // Offset by half a tile so that tile (0,0) is centered at (tile_width/2, tile_height/2)
+        // This aligns with our positive Y coordinate system where origin is at bottom-left
+        let texture = TilemapTexture::Single(atlas_image.clone());
+        commands.entity(tilemap_entity).insert((
+            TilemapBundle {
+                grid_size,
+                size: map_size,
+                storage: tile_storage,
+                texture,
+                tile_size,
+                map_type: TilemapType::Square,
+                transform: Transform::from_xyz(tile_size.x / 2.0, tile_size.y / 2.0, 0.0),
+                ..default()
+            },
+            TilesetReference(tileset_handle),
+        ));
 
         info!("Created tilemap for tileset with {} tiles", tile_count);
     }

@@ -1,4 +1,4 @@
-//! # bevy_tiledmap
+//! # `bevy_tiledmap`
 //!
 //! Tiled map loader and integration for Bevy.
 //!
@@ -41,7 +41,7 @@
 //! - **Layer 2** ([`core`]): ECS entity spawning with property merging and events
 //! - **Layer 3** (optional): Integration plugins for rendering and physics
 //!   - [`tilemap`]: High-performance tilemap rendering with `bevy_ecs_tilemap`
-//!   - [`avian`]: Physics integration with Avian2D
+//!   - [`avian`]: Physics integration with `Avian2D`
 //!   - [`native`]: Future Bevy native tilemap support (placeholder)
 //!
 //! ## Using Individual Crates
@@ -77,7 +77,7 @@ pub use bevy_tiledmap_avian as avian;
 #[cfg(feature = "native")]
 pub use bevy_tiledmap_native as native;
 
-/// Unified prelude for bevy_tiledmap
+/// Unified prelude for `bevy_tiledmap`
 ///
 /// This module re-exports the most commonly used types from all sub-crates
 /// for convenient access.
