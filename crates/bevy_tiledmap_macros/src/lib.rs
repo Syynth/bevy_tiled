@@ -4,11 +4,60 @@
 //! registration and property deserialization.
 
 use proc_macro::TokenStream;
+use proc_macro_crate::{FoundCrate, crate_name};
 use quote::{format_ident, quote};
 use syn::{
     Data, DataEnum, DeriveInput, Fields, Lit, Meta, MetaNameValue, Type, Variant,
     parse_macro_input, punctuated::Punctuated, token::Comma,
 };
+
+/// Get the path tokens for bevy_tiledmap crate (either umbrella or core).
+/// Returns tokens for accessing properties module and other re-exports.
+fn get_crate_paths() -> (
+    proc_macro2::TokenStream,
+    proc_macro2::TokenStream,
+    proc_macro2::TokenStream,
+) {
+    // Try to find the umbrella crate first
+    if let Ok(found) = crate_name("bevy_tiledmap") {
+        let base = match found {
+            FoundCrate::Itself => quote!(crate),
+            FoundCrate::Name(name) => {
+                let ident = format_ident!("{}", name);
+                quote!(#ident)
+            }
+        };
+        // Umbrella crate: properties are at bevy_tiledmap::core::properties
+        (
+            quote!(#base::core::properties),
+            quote!(#base::inventory),
+            quote!(#base::tiled),
+        )
+    } else if let Ok(found) = crate_name("bevy_tiledmap_core") {
+        // Fall back to core crate directly
+        let base = match found {
+            FoundCrate::Itself => quote!(crate),
+            FoundCrate::Name(name) => {
+                let ident = format_ident!("{}", name);
+                quote!(#ident)
+            }
+        };
+        // Core crate: properties are at bevy_tiledmap_core::properties
+        // inventory and tiled must be root-level deps in this case
+        (
+            quote!(#base::properties),
+            quote!(::inventory),
+            quote!(::tiled),
+        )
+    } else {
+        // Fallback - assume umbrella crate
+        (
+            quote!(bevy_tiledmap::core::properties),
+            quote!(bevy_tiledmap::inventory),
+            quote!(bevy_tiledmap::tiled),
+        )
+    }
+}
 
 /// Derive macro for registering a type as a Tiled custom class.
 ///
@@ -46,8 +95,23 @@ pub fn derive_tiled_class(input: TokenStream) -> TokenStream {
     }
 }
 
+/// Crate paths for code generation
+struct CratePaths {
+    properties: proc_macro2::TokenStream,
+    inventory: proc_macro2::TokenStream,
+    tiled: proc_macro2::TokenStream,
+}
+
 fn derive_tiled_class_impl(input: DeriveInput) -> syn::Result<TokenStream> {
     let type_name = &input.ident;
+
+    // Get crate paths once
+    let (properties, inventory, tiled) = get_crate_paths();
+    let paths = CratePaths {
+        properties,
+        inventory,
+        tiled,
+    };
 
     // Parse #[tiled(name = "...")] attribute
     let tiled_name = parse_tiled_name_attr(&input.attrs)?;
@@ -57,8 +121,8 @@ fn derive_tiled_class_impl(input: DeriveInput) -> syn::Result<TokenStream> {
         Data::Struct(data) => {
             // Handle struct (including unit structs)
             match &data.fields {
-                Fields::Named(fields) => handle_struct(type_name, &tiled_name, &fields.named),
-                Fields::Unit => handle_unit_struct(type_name, &tiled_name),
+                Fields::Named(fields) => handle_struct(type_name, &tiled_name, &fields.named, &paths),
+                Fields::Unit => handle_unit_struct(type_name, &tiled_name, &paths),
                 Fields::Unnamed(_) => Err(syn::Error::new_spanned(
                     type_name,
                     "TiledClass does not support tuple structs",
@@ -67,7 +131,7 @@ fn derive_tiled_class_impl(input: DeriveInput) -> syn::Result<TokenStream> {
         }
         Data::Enum(data) => {
             // Handle enum
-            handle_enum(type_name, &tiled_name, data, &input.attrs)
+            handle_enum(type_name, &tiled_name, data, &input.attrs, &paths)
         }
         _ => Err(syn::Error::new_spanned(
             type_name,
@@ -80,7 +144,10 @@ fn handle_struct(
     struct_name: &syn::Ident,
     tiled_name: &str,
     fields: &Punctuated<syn::Field, Comma>,
+    paths: &CratePaths,
 ) -> syn::Result<TokenStream> {
+    let properties = &paths.properties;
+
     // Generate field deserialization code and metadata
     let mut field_inits = Vec::new();
     let mut field_metadata = Vec::new();
@@ -104,11 +171,11 @@ fn handle_struct(
 
         // Generate field metadata for JSON export
         let field_name_str = field_name.to_string();
-        let tiled_type = map_rust_type_to_tiled(field_type);
-        let default_expr = generate_default_value_expr(field_type, &default_value)?;
+        let tiled_type = map_rust_type_to_tiled(field_type, paths);
+        let default_expr = generate_default_value_expr(field_type, &default_value, paths)?;
 
         field_metadata.push(quote! {
-            bevy_tiledmap_core::properties::TiledFieldInfo {
+            #properties::TiledFieldInfo {
                 name: #field_name_str,
                 tiled_type: #tiled_type,
                 default_value: #default_expr,
@@ -120,20 +187,20 @@ fn handle_struct(
             // Optional fields: extract inner type T from Option<T>
             quote! {
                 #field_name: __properties.get(#field_name_str)
-                    .and_then(|v| <#inner_type as bevy_tiledmap_core::properties::FromTiledProperty>::from_property(v))
+                    .and_then(|v| <#inner_type as #properties::FromTiledProperty>::from_property(v))
             }
         } else if let Some(default) = default_value {
             // Fields with defaults use the default if missing
             quote! {
                 #field_name: __properties.get(#field_name_str)
-                    .and_then(|v| <#field_type as bevy_tiledmap_core::properties::FromTiledProperty>::from_property(v))
+                    .and_then(|v| <#field_type as #properties::FromTiledProperty>::from_property(v))
                     .unwrap_or(#default)
             }
         } else {
             // Required fields error if missing
             quote! {
                 #field_name: __properties.get(#field_name_str)
-                    .and_then(|v| <#field_type as bevy_tiledmap_core::properties::FromTiledProperty>::from_property(v))
+                    .and_then(|v| <#field_type as #properties::FromTiledProperty>::from_property(v))
                     .ok_or_else(|| format!("Missing required property '{}'", #field_name_str))?
             }
         };
@@ -145,17 +212,20 @@ fn handle_struct(
     let fields_array_name =
         quote::format_ident!("__TILED_FIELDS_{}", struct_name.to_string().to_uppercase());
 
+    let inventory = &paths.inventory;
+    let tiled = &paths.tiled;
+
     // Generate the complete implementation
     let expanded = quote! {
         // Static array of field metadata for JSON export
         #[doc(hidden)]
-        static #fields_array_name: &[bevy_tiledmap_core::properties::TiledFieldInfo] = &[
+        static #fields_array_name: &[#properties::TiledFieldInfo] = &[
             #(#field_metadata),*
         ];
 
         // Submit to inventory for compile-time registration
-        ::inventory::submit! {
-            bevy_tiledmap_core::properties::TiledClassInfo {
+        #inventory::submit! {
+            #properties::TiledClassInfo {
                 type_id: ::std::any::TypeId::of::<#struct_name>(),
                 name: #tiled_name,
                 fields: #fields_array_name,
@@ -166,7 +236,7 @@ fn handle_struct(
         impl #struct_name {
             #[doc(hidden)]
             fn __tiled_from_properties(
-                __properties: &::tiled::Properties,
+                __properties: &#tiled::Properties,
             ) -> ::std::result::Result<::std::boxed::Box<dyn ::bevy::reflect::Reflect>, ::std::string::String> {
                 let instance = Self {
                     #(#field_inits),*
@@ -181,19 +251,23 @@ fn handle_struct(
 }
 
 /// Handle unit struct (no fields) - used as marker components
-fn handle_unit_struct(struct_name: &syn::Ident, tiled_name: &str) -> syn::Result<TokenStream> {
+fn handle_unit_struct(struct_name: &syn::Ident, tiled_name: &str, paths: &CratePaths) -> syn::Result<TokenStream> {
     // Generate static field metadata array (empty for unit structs)
     let fields_array_name =
         quote::format_ident!("__TILED_FIELDS_{}", struct_name.to_string().to_uppercase());
 
+    let properties = &paths.properties;
+    let inventory = &paths.inventory;
+    let tiled = &paths.tiled;
+
     let expanded = quote! {
         // Static array of field metadata (empty for unit struct)
         #[doc(hidden)]
-        static #fields_array_name: &[bevy_tiledmap_core::properties::TiledFieldInfo] = &[];
+        static #fields_array_name: &[#properties::TiledFieldInfo] = &[];
 
         // Submit to inventory for compile-time registration
-        ::inventory::submit! {
-            bevy_tiledmap_core::properties::TiledClassInfo {
+        #inventory::submit! {
+            #properties::TiledClassInfo {
                 type_id: ::std::any::TypeId::of::<#struct_name>(),
                 name: #tiled_name,
                 fields: #fields_array_name,
@@ -204,7 +278,7 @@ fn handle_unit_struct(struct_name: &syn::Ident, tiled_name: &str) -> syn::Result
         impl #struct_name {
             #[doc(hidden)]
             fn __tiled_from_properties(
-                _properties: &::tiled::Properties,
+                _properties: &#tiled::Properties,
             ) -> ::std::result::Result<::std::boxed::Box<dyn ::bevy::reflect::Reflect>, ::std::string::String> {
                 Ok(::std::boxed::Box::new(Self))
             }
@@ -219,6 +293,7 @@ fn handle_enum(
     tiled_name: &str,
     data: &DataEnum,
     attrs: &[syn::Attribute],
+    paths: &CratePaths,
 ) -> syn::Result<TokenStream> {
     // Analyze enum variants to determine if unit-only or complex
     let enum_kind = analyze_enum_variants(&data.variants)?;
@@ -229,12 +304,12 @@ fn handle_enum(
     match (enum_kind, enum_format) {
         (EnumKind::UnitOnly, EnumFormat::Auto) => {
             // Generate unit-variant enum implementation
-            generate_unit_enum_impl(enum_name, tiled_name, &data.variants)
+            generate_unit_enum_impl(enum_name, tiled_name, &data.variants, paths)
         }
         (EnumKind::Complex, _) | (_, EnumFormat::Struct) => {
             // Generate complex enum implementation (struct/tuple variants)
             let analysis = analyze_enum_variants_detailed(&data.variants)?;
-            generate_complex_enum_impl(enum_name, tiled_name, &analysis)
+            generate_complex_enum_impl(enum_name, tiled_name, &analysis, paths)
         }
     }
 }
@@ -385,7 +460,12 @@ fn generate_unit_enum_impl(
     enum_name: &syn::Ident,
     tiled_name: &str,
     variants: &Punctuated<Variant, Comma>,
+    paths: &CratePaths,
 ) -> syn::Result<TokenStream> {
+    let properties = &paths.properties;
+    let inventory = &paths.inventory;
+    let tiled = &paths.tiled;
+
     // Extract variant names
     let variant_names: Vec<String> = variants.iter().map(|v| v.ident.to_string()).collect();
 
@@ -427,10 +507,10 @@ fn generate_unit_enum_impl(
         ];
 
         // Implement FromTiledProperty for the enum
-        impl bevy_tiledmap_core::properties::FromTiledProperty for #enum_name {
-            fn from_property(value: &::tiled::PropertyValue) -> ::std::option::Option<Self> {
+        impl #properties::FromTiledProperty for #enum_name {
+            fn from_property(value: &#tiled::PropertyValue) -> ::std::option::Option<Self> {
                 match value {
-                    ::tiled::PropertyValue::StringValue(s) => {
+                    #tiled::PropertyValue::StringValue(s) => {
                         match s.as_str() {
                             #(#from_property_arms)*
                             _ => ::std::option::Option::None,
@@ -442,11 +522,11 @@ fn generate_unit_enum_impl(
         }
 
         // Submit to inventory for compile-time registration
-        ::inventory::submit! {
-            bevy_tiledmap_core::properties::TiledEnumInfo {
+        #inventory::submit! {
+            #properties::TiledEnumInfo {
                 type_id: ::std::any::TypeId::of::<#enum_name>(),
                 name: #tiled_name,
-                kind: bevy_tiledmap_core::properties::TiledEnumKind::Simple {
+                kind: #properties::TiledEnumKind::Simple {
                     variants: #variants_array_name,
                     from_string: |s: &str| -> ::std::result::Result<::std::boxed::Box<dyn ::bevy::reflect::Reflect>, ::std::string::String> {
                         match s {
@@ -457,9 +537,9 @@ fn generate_unit_enum_impl(
                         }
                     },
                 },
-                from_property: |value: &::tiled::PropertyValue| -> ::std::result::Result<::std::boxed::Box<dyn ::bevy::reflect::Reflect>, ::std::string::String> {
+                from_property: |value: &#tiled::PropertyValue| -> ::std::result::Result<::std::boxed::Box<dyn ::bevy::reflect::Reflect>, ::std::string::String> {
                     match value {
-                        ::tiled::PropertyValue::StringValue(s) => {
+                        #tiled::PropertyValue::StringValue(s) => {
                             match s.as_str() {
                                 #(#variant_match_arms)*
                                 _ => ::std::result::Result::Err(
@@ -484,27 +564,32 @@ fn generate_complex_enum_impl(
     enum_name: &syn::Ident,
     tiled_name: &str,
     analysis: &EnumAnalysis,
+    paths: &CratePaths,
 ) -> syn::Result<TokenStream> {
+    let properties = &paths.properties;
+    let inventory = &paths.inventory;
+    let tiled = &paths.tiled;
+
     // Generate field metadata arrays for each variant
-    let variant_metadata_arrays = generate_variant_metadata_arrays(enum_name, &analysis.variants)?;
+    let variant_metadata_arrays = generate_variant_metadata_arrays(enum_name, &analysis.variants, paths)?;
 
     // Generate FromTiledProperty implementation
     let from_property_impl =
-        generate_complex_from_property_impl(enum_name, tiled_name, &analysis.variants)?;
+        generate_complex_from_property_impl(enum_name, tiled_name, &analysis.variants, paths)?;
 
     // Generate TiledVariantInfo array
-    let variant_info_array = generate_variant_info_array(enum_name, &analysis.variants)?;
+    let variant_info_array = generate_variant_info_array(enum_name, &analysis.variants, paths)?;
 
     // Generate inventory submission
     let inventory_submission = quote! {
-        ::inventory::submit! {
-            bevy_tiledmap_core::properties::TiledEnumInfo {
+        #inventory::submit! {
+            #properties::TiledEnumInfo {
                 type_id: ::std::any::TypeId::of::<#enum_name>(),
                 name: #tiled_name,
-                kind: bevy_tiledmap_core::properties::TiledEnumKind::Complex {
+                kind: #properties::TiledEnumKind::Complex {
                     variant_info: #variant_info_array,
                 },
-                from_property: |value: &::tiled::PropertyValue| -> ::std::result::Result<::std::boxed::Box<dyn ::bevy::reflect::Reflect>, ::std::string::String> {
+                from_property: |value: &#tiled::PropertyValue| -> ::std::result::Result<::std::boxed::Box<dyn ::bevy::reflect::Reflect>, ::std::string::String> {
                     #from_property_impl
                 },
             }
@@ -538,7 +623,7 @@ fn generate_complex_enum_impl(
                             quote! {
                                 let #field_ident: #field_type = properties
                                     .get(#field_name)
-                                    .and_then(|v| <#field_type as bevy_tiledmap_core::properties::FromTiledProperty>::from_property(v))?;
+                                    .and_then(|v| <#field_type as #properties::FromTiledProperty>::from_property(v))?;
                             }
                         })
                         .collect();
@@ -567,7 +652,7 @@ fn generate_complex_enum_impl(
                             quote! {
                                 let #field_var: #field_type = properties
                                     .get(#field_name)
-                                    .and_then(|v| <#field_type as bevy_tiledmap_core::properties::FromTiledProperty>::from_property(v))?;
+                                    .and_then(|v| <#field_type as #properties::FromTiledProperty>::from_property(v))?;
                             }
                         })
                         .collect();
@@ -593,15 +678,15 @@ fn generate_complex_enum_impl(
         #variant_metadata_arrays
 
         // Implement FromTiledProperty for the enum
-        impl bevy_tiledmap_core::properties::FromTiledProperty for #enum_name {
-            fn from_property(value: &::tiled::PropertyValue) -> ::std::option::Option<Self> {
+        impl #properties::FromTiledProperty for #enum_name {
+            fn from_property(value: &#tiled::PropertyValue) -> ::std::option::Option<Self> {
                 match value {
-                    ::tiled::PropertyValue::ClassValue { properties, .. } => {
+                    #tiled::PropertyValue::ClassValue { properties, .. } => {
                         // Extract :variant discriminant field
                         let variant_name = properties
                             .get(":variant")
                             .and_then(|v| match v {
-                                ::tiled::PropertyValue::StringValue(s) => ::std::option::Option::Some(s.as_str()),
+                                #tiled::PropertyValue::StringValue(s) => ::std::option::Option::Some(s.as_str()),
                                 _ => ::std::option::Option::None,
                             })?;
 
@@ -626,7 +711,9 @@ fn generate_complex_enum_impl(
 fn generate_variant_metadata_arrays(
     enum_name: &syn::Ident,
     variants: &[VariantAnalysis],
+    paths: &CratePaths,
 ) -> syn::Result<proc_macro2::TokenStream> {
+    let properties = &paths.properties;
     let mut arrays = Vec::new();
 
     for variant in variants {
@@ -642,11 +729,11 @@ fn generate_variant_metadata_arrays(
                     .iter()
                     .map(|field| {
                         let field_name = field.ident.to_string();
-                        let tiled_type = map_rust_type_to_tiled(&field.ty);
-                        let default_value = generate_type_default(&field.ty)?;
+                        let tiled_type = map_rust_type_to_tiled(&field.ty, paths);
+                        let default_value = generate_type_default(&field.ty, paths)?;
 
                         Ok(quote! {
-                            bevy_tiledmap_core::properties::TiledFieldInfo {
+                            #properties::TiledFieldInfo {
                                 name: #field_name,
                                 tiled_type: #tiled_type,
                                 default_value: #default_value,
@@ -658,11 +745,11 @@ fn generate_variant_metadata_arrays(
                     .iter()
                     .map(|field| {
                         let field_name = field.index.to_string();
-                        let tiled_type = map_rust_type_to_tiled(&field.ty);
-                        let default_value = generate_type_default(&field.ty)?;
+                        let tiled_type = map_rust_type_to_tiled(&field.ty, paths);
+                        let default_value = generate_type_default(&field.ty, paths)?;
 
                         Ok(quote! {
-                            bevy_tiledmap_core::properties::TiledFieldInfo {
+                            #properties::TiledFieldInfo {
                                 name: #field_name,
                                 tiled_type: #tiled_type,
                                 default_value: #default_value,
@@ -674,7 +761,7 @@ fn generate_variant_metadata_arrays(
 
             arrays.push(quote! {
                 #[doc(hidden)]
-                static #array_name: &[bevy_tiledmap_core::properties::TiledFieldInfo] = &[
+                static #array_name: &[#properties::TiledFieldInfo] = &[
                     #(#field_entries),*
                 ];
             });
@@ -690,7 +777,9 @@ fn generate_variant_metadata_arrays(
 fn generate_variant_info_array(
     enum_name: &syn::Ident,
     variants: &[VariantAnalysis],
+    paths: &CratePaths,
 ) -> syn::Result<proc_macro2::TokenStream> {
+    let properties = &paths.properties;
     let _array_name = format_ident!(
         "__TILED_ENUM_VARIANTS_{}",
         enum_name.to_string().to_uppercase()
@@ -704,7 +793,7 @@ fn generate_variant_info_array(
 
             let variant_kind = match &variant.fields {
                 None => quote! {
-                    bevy_tiledmap_core::properties::TiledVariantKind::Unit
+                    #properties::TiledVariantKind::Unit
                 },
                 Some(VariantFields::Named(_)) => {
                     let fields_array_name = format_ident!(
@@ -713,7 +802,7 @@ fn generate_variant_info_array(
                         variant.name.to_uppercase()
                     );
                     quote! {
-                        bevy_tiledmap_core::properties::TiledVariantKind::Struct {
+                        #properties::TiledVariantKind::Struct {
                             fields: #fields_array_name
                         }
                     }
@@ -725,7 +814,7 @@ fn generate_variant_info_array(
                         variant.name.to_uppercase()
                     );
                     quote! {
-                        bevy_tiledmap_core::properties::TiledVariantKind::Tuple {
+                        #properties::TiledVariantKind::Tuple {
                             fields: #fields_array_name
                         }
                     }
@@ -733,7 +822,7 @@ fn generate_variant_info_array(
             };
 
             quote! {
-                bevy_tiledmap_core::properties::TiledVariantInfo {
+                #properties::TiledVariantInfo {
                     name: #variant_name,
                     kind: #variant_kind,
                     is_default: #is_default,
@@ -750,7 +839,10 @@ fn generate_complex_from_property_impl(
     enum_name: &syn::Ident,
     tiled_name: &str,
     variants: &[VariantAnalysis],
+    paths: &CratePaths,
 ) -> syn::Result<proc_macro2::TokenStream> {
+    let properties = &paths.properties;
+    let tiled = &paths.tiled;
     // Generate match arms for each variant
     let variant_match_arms: Vec<_> = variants
         .iter()
@@ -779,7 +871,7 @@ fn generate_complex_from_property_impl(
                             quote! {
                                 let #field_ident: #field_type = properties
                                     .get(#field_name)
-                                    .and_then(|v| <#field_type as bevy_tiledmap_core::properties::FromTiledProperty>::from_property(v))
+                                    .and_then(|v| <#field_type as #properties::FromTiledProperty>::from_property(v))
                                     .ok_or_else(|| ::std::format!(
                                         "Missing or invalid field '{}' for variant '{}'",
                                         #field_name,
@@ -813,7 +905,7 @@ fn generate_complex_from_property_impl(
                             quote! {
                                 let #field_var: #field_type = properties
                                     .get(#field_name)
-                                    .and_then(|v| <#field_type as bevy_tiledmap_core::properties::FromTiledProperty>::from_property(v))
+                                    .and_then(|v| <#field_type as #properties::FromTiledProperty>::from_property(v))
                                     .ok_or_else(|| ::std::format!(
                                         "Missing or invalid field '{}' for variant '{}'",
                                         #field_name,
@@ -842,12 +934,12 @@ fn generate_complex_from_property_impl(
 
     Ok(quote! {
         match value {
-            ::tiled::PropertyValue::ClassValue { properties, .. } => {
+            #tiled::PropertyValue::ClassValue { properties, .. } => {
                 // Extract :variant discriminant field
                 let variant_name = properties
                     .get(":variant")
                     .and_then(|v| match v {
-                        ::tiled::PropertyValue::StringValue(s) => ::std::option::Option::Some(s.as_str()),
+                        #tiled::PropertyValue::StringValue(s) => ::std::option::Option::Some(s.as_str()),
                         _ => ::std::option::Option::None,
                     })
                     .ok_or_else(|| ::std::string::String::from(
@@ -988,7 +1080,8 @@ fn extract_type_name(type_path: &syn::TypePath) -> String {
 /// Map Rust type to Tiled property type.
 ///
 /// Returns a `TiledTypeKind` token stream for use in macro expansion.
-fn map_rust_type_to_tiled(ty: &Type) -> proc_macro2::TokenStream {
+fn map_rust_type_to_tiled(ty: &Type, paths: &CratePaths) -> proc_macro2::TokenStream {
+    let properties = &paths.properties;
     // For Option<T>, unwrap to get the inner type
     let actual_type = extract_option_inner_type(ty).unwrap_or(ty);
 
@@ -997,20 +1090,20 @@ fn map_rust_type_to_tiled(ty: &Type) -> proc_macro2::TokenStream {
 
         // Check if it's a primitive type
         match type_name.as_str() {
-            "bool" => return quote! { bevy_tiledmap_core::properties::TiledTypeKind::Bool },
+            "bool" => return quote! { #properties::TiledTypeKind::Bool },
             "i32" | "i64" | "i16" | "i8" | "u32" | "u64" | "u16" | "u8" | "usize" | "isize" => {
-                return quote! { bevy_tiledmap_core::properties::TiledTypeKind::Int };
+                return quote! { #properties::TiledTypeKind::Int };
             }
-            "f32" | "f64" => return quote! { bevy_tiledmap_core::properties::TiledTypeKind::Float },
+            "f32" | "f64" => return quote! { #properties::TiledTypeKind::Float },
             "String" | "str" => {
-                return quote! { bevy_tiledmap_core::properties::TiledTypeKind::String };
+                return quote! { #properties::TiledTypeKind::String };
             }
-            "Color" => return quote! { bevy_tiledmap_core::properties::TiledTypeKind::Color },
+            "Color" => return quote! { #properties::TiledTypeKind::Color },
             _ => {
                 // Not a primitive - it's a referenced type (Vec2, custom types, etc.)
                 let full_path = extract_full_type_path(type_path);
                 return quote! {
-                    bevy_tiledmap_core::properties::TiledTypeKind::Class {
+                    #properties::TiledTypeKind::Class {
                         property_type: #full_path
                     }
                 };
@@ -1019,31 +1112,34 @@ fn map_rust_type_to_tiled(ty: &Type) -> proc_macro2::TokenStream {
     }
 
     // Fallback for complex types
-    quote! { bevy_tiledmap_core::properties::TiledTypeKind::String }
+    quote! { #properties::TiledTypeKind::String }
 }
 
 /// Generate `TiledDefaultValue` expression for a field
 fn generate_default_value_expr(
     ty: &Type,
     default_attr: &Option<proc_macro2::TokenStream>,
+    paths: &CratePaths,
 ) -> syn::Result<proc_macro2::TokenStream> {
     // Get the actual type (unwrap Option if needed)
     let actual_type = extract_option_inner_type(ty).unwrap_or(ty);
 
     // If there's a #[tiled(default = ...)] attribute, use it
     if let Some(default_tokens) = default_attr {
-        return generate_default_from_tokens(actual_type, default_tokens);
+        return generate_default_from_tokens(actual_type, default_tokens, paths);
     }
 
     // Otherwise generate a sensible default based on type
-    generate_type_default(actual_type)
+    generate_type_default(actual_type, paths)
 }
 
 /// Generate `TiledDefaultValue` from explicit default attribute
 fn generate_default_from_tokens(
     ty: &Type,
     tokens: &proc_macro2::TokenStream,
+    paths: &CratePaths,
 ) -> syn::Result<proc_macro2::TokenStream> {
+    let properties = &paths.properties;
     if let Type::Path(type_path) = ty
         && let Some(segment) = type_path.path.segments.last()
     {
@@ -1051,33 +1147,34 @@ fn generate_default_from_tokens(
 
         return Ok(match type_name.as_str() {
             "bool" => quote! {
-                bevy_tiledmap_core::properties::TiledDefaultValue::Bool(#tokens)
+                #properties::TiledDefaultValue::Bool(#tokens)
             },
             "i32" | "i64" | "i16" | "i8" | "u32" | "u64" | "u16" | "u8" => quote! {
-                bevy_tiledmap_core::properties::TiledDefaultValue::Int(#tokens as i32)
+                #properties::TiledDefaultValue::Int(#tokens as i32)
             },
             "f32" | "f64" => quote! {
-                bevy_tiledmap_core::properties::TiledDefaultValue::Float(#tokens as f32)
+                #properties::TiledDefaultValue::Float(#tokens as f32)
             },
             "Color" => {
                 // Color defaults need special handling
                 quote! {
-                    bevy_tiledmap_core::properties::TiledDefaultValue::Color { r: 255, g: 255, b: 255, a: 255 }
+                    #properties::TiledDefaultValue::Color { r: 255, g: 255, b: 255, a: 255 }
                 }
             }
             _ => quote! {
-                bevy_tiledmap_core::properties::TiledDefaultValue::String("")
+                #properties::TiledDefaultValue::String("")
             },
         });
     }
 
     Ok(quote! {
-        bevy_tiledmap_core::properties::TiledDefaultValue::String("")
+        #properties::TiledDefaultValue::String("")
     })
 }
 
 /// Generate default `TiledDefaultValue` based on type alone
-fn generate_type_default(ty: &Type) -> syn::Result<proc_macro2::TokenStream> {
+fn generate_type_default(ty: &Type, paths: &CratePaths) -> syn::Result<proc_macro2::TokenStream> {
+    let properties = &paths.properties;
     if let Type::Path(type_path) = ty
         && let Some(segment) = type_path.path.segments.last()
     {
@@ -1085,26 +1182,26 @@ fn generate_type_default(ty: &Type) -> syn::Result<proc_macro2::TokenStream> {
 
         return Ok(match type_name.as_str() {
             "bool" => quote! {
-                bevy_tiledmap_core::properties::TiledDefaultValue::Bool(false)
+                #properties::TiledDefaultValue::Bool(false)
             },
             "i32" | "i64" | "i16" | "i8" | "u32" | "u64" | "u16" | "u8" | "isize" | "usize" => {
                 quote! {
-                    bevy_tiledmap_core::properties::TiledDefaultValue::Int(0)
+                    #properties::TiledDefaultValue::Int(0)
                 }
             }
             "f32" | "f64" => quote! {
-                bevy_tiledmap_core::properties::TiledDefaultValue::Float(0.0)
+                #properties::TiledDefaultValue::Float(0.0)
             },
             "Color" => quote! {
-                bevy_tiledmap_core::properties::TiledDefaultValue::Color { r: 255, g: 255, b: 255, a: 255 }
+                #properties::TiledDefaultValue::Color { r: 255, g: 255, b: 255, a: 255 }
             },
             _ => quote! {
-                bevy_tiledmap_core::properties::TiledDefaultValue::String("")
+                #properties::TiledDefaultValue::String("")
             },
         });
     }
 
     Ok(quote! {
-        bevy_tiledmap_core::properties::TiledDefaultValue::String("")
+        #properties::TiledDefaultValue::String("")
     })
 }

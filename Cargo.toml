@@ -41,6 +41,10 @@ bevy_tiledmap_native = { path = "crates/bevy_tiledmap_native", version = "0.1.0"
 # Bevy (required)
 bevy = { version = "0.17", default-features = false }
 
+# Re-exported for TiledClass macro users
+tiled = "0.15"
+inventory = "0.3"
+
 [dev-dependencies]
 # For examples - use full Bevy with default features
 bevy = { version = "0.17" }

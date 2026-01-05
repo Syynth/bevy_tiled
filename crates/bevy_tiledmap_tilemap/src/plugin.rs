@@ -43,8 +43,10 @@ impl TilemapPlugin {
 
 impl Plugin for TilemapPlugin {
     fn build(&self, app: &mut App) {
-        // Add bevy_ecs_tilemap plugin
-        app.add_plugins(bevy_ecs_tilemap::TilemapPlugin);
+        // Add bevy_ecs_tilemap plugin if not already added
+        if !app.is_plugin_added::<bevy_ecs_tilemap::TilemapPlugin>() {
+            app.add_plugins(bevy_ecs_tilemap::TilemapPlugin);
+        }
 
         // Insert config resource
         app.insert_resource(self.config.clone());

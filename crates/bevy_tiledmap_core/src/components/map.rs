@@ -3,6 +3,27 @@
 use bevy::prelude::*;
 use bevy_tiledmap_assets::prelude::{TiledMapAsset, TiledWorldAsset};
 
+/// Marker component for scene roots (both maps and worlds).
+///
+/// This component is automatically added to both `TiledMap` and `TiledWorld` entities,
+/// allowing you to query for any Tiled scene root without distinguishing between them.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// # use bevy::prelude::*;
+/// # use bevy_tiledmap_core::prelude::TiledSceneRoot;
+/// fn find_scene_root(query: Query<Entity, With<TiledSceneRoot>>) {
+///     for entity in &query {
+///         // Works for both maps and worlds
+///         println!("Scene root: {:?}", entity);
+///     }
+/// }
+/// ```
+#[derive(Component, Reflect, Default)]
+#[reflect(Component)]
+pub struct TiledSceneRoot;
+
 /// Root component for a Tiled world.
 ///
 /// Spawn an entity with this component to trigger world loading and entity hierarchy creation.

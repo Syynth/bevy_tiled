@@ -5,6 +5,7 @@ use bevy::prelude::*;
 use bevy_tiledmap_assets::prelude::{TiledMapAsset, TiledTilesetAsset, TiledWorldAsset};
 
 use crate::components::{MapsInWorld, TiledMap, TiledWorld, TiledWorldOf};
+use crate::events::{MapSpawned, WorldSpawned};
 use crate::spawn::spawn_map;
 use crate::systems::SpawnContext;
 
@@ -83,6 +84,9 @@ pub fn process_loaded_maps(
         spawn_map(&mut commands, map_entity, &context, &type_registry);
 
         info!("Map hierarchy spawned successfully");
+
+        // Trigger MapSpawned event on the entity for observers
+        commands.entity(map_entity).trigger(|entity| MapSpawned { entity });
 
         // Remove RespawnTiledMap marker if present
         commands.entity(map_entity).remove::<RespawnTiledMap>();
@@ -207,13 +211,39 @@ pub fn process_loaded_worlds(
         }
 
         // Add MapsInWorld component to track the spawned maps
+        // Also add PendingWorldSpawn to track when all maps finish processing
         commands
             .entity(world_entity)
-            .insert(MapsInWorld(map_entities));
+            .insert((MapsInWorld(map_entities.clone()), PendingWorldSpawn(map_entities)));
 
         // Remove RespawnTiledWorld marker if present
         commands.entity(world_entity).remove::<RespawnTiledWorld>();
 
         info!("World hierarchy spawned successfully");
+    }
+}
+
+/// Marker component to track worlds waiting for all maps to finish spawning.
+#[derive(Component)]
+pub struct PendingWorldSpawn(pub Vec<Entity>);
+
+/// System that checks if all maps in a world have finished spawning.
+/// Fires `WorldSpawned` when all child maps have `LayersInMap`.
+pub fn check_world_spawn_complete(
+    mut commands: Commands,
+    world_query: Query<(Entity, &PendingWorldSpawn)>,
+    map_query: Query<&crate::components::LayersInMap>,
+) {
+    for (world_entity, pending) in &world_query {
+        // Check if all maps have LayersInMap (indicating spawn complete)
+        let all_maps_ready = pending.0.iter().all(|&map_entity| {
+            map_query.get(map_entity).is_ok()
+        });
+
+        if all_maps_ready {
+            info!("All maps in world {:?} are ready, firing WorldSpawned", world_entity);
+            commands.entity(world_entity).trigger(|entity| WorldSpawned { entity });
+            commands.entity(world_entity).remove::<PendingWorldSpawn>();
+        }
     }
 }

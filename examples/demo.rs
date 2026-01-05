@@ -35,7 +35,10 @@ fn main() {
         .add_plugins(EguiPlugin::default())
         .add_plugins(WorldInspectorPlugin::default())
         .add_systems(Startup, (setup_camera, spawn_map))
-        .add_systems(Update, (player_movement, fit_camera_to_map, draw_map_bounds_gizmos))
+        .add_systems(
+            Update,
+            (player_movement, fit_camera_to_map, draw_map_bounds_gizmos),
+        )
         .run();
 }
 
@@ -124,7 +127,7 @@ fn fit_camera_to_map(
         let scale_y = map_size.y / window_size.y;
         let scale = scale_x.max(scale_y) * 1.1; // 10% padding
 
-        camera.orthographic_mut().unwrap().scale = scale;
+        // camera.orthographic_mut().unwrap().scale = scale;
     }
 }
 
@@ -141,10 +144,18 @@ fn draw_map_bounds_gizmos(map_query: Query<&MapGeometry>, mut gizmos: Gizmos) {
         gizmos.circle_2d(bounds.max, 8.0, Color::srgb(1.0, 0.0, 0.0));
 
         // BLUE = top-left corner
-        gizmos.circle_2d(Vec2::new(bounds.min.x, bounds.max.y), 8.0, Color::srgb(0.0, 0.0, 1.0));
+        gizmos.circle_2d(
+            Vec2::new(bounds.min.x, bounds.max.y),
+            8.0,
+            Color::srgb(0.0, 0.0, 1.0),
+        );
 
         // YELLOW = bottom-right corner
-        gizmos.circle_2d(Vec2::new(bounds.max.x, bounds.min.y), 8.0, Color::srgb(1.0, 1.0, 0.0));
+        gizmos.circle_2d(
+            Vec2::new(bounds.max.x, bounds.min.y),
+            8.0,
+            Color::srgb(1.0, 1.0, 0.0),
+        );
 
         // Draw bounding rectangle
         gizmos.rect_2d(bounds.center(), bounds.size(), Color::srgb(1.0, 1.0, 1.0));

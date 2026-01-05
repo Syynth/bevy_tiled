@@ -60,11 +60,11 @@ pub mod prelude {
 
     pub use crate::components::{
         LayerId, MapGeometry, ObjectId, TiledLayer, TiledLayerMapOf, TiledMap, TiledObject,
-        TiledObjectMapOf, TiledWorld,
+        TiledObjectMapOf, TiledSceneRoot, TiledWorld,
     };
     pub use crate::events::{
-        GroupLayerSpawned, ImageLayerSpawned, ObjectLayerSpawned, ObjectSpawned,
-        TileLayerSpawned,
+        GroupLayerSpawned, ImageLayerSpawned, MapSpawned, ObjectLayerSpawned, ObjectSpawned,
+        TileLayerSpawned, WorldSpawned,
     };
     pub use crate::plugin::{TiledmapCoreConfig, TiledmapCorePlugin};
     pub use crate::properties::{FromTiledProperty, MergedProperties, TiledClassRegistry};

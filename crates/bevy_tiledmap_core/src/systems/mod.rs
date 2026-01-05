@@ -4,4 +4,4 @@ pub mod context;
 pub mod spawn;
 
 pub use context::SpawnContext;
-pub use spawn::{process_loaded_maps, process_loaded_worlds};
+pub use spawn::{check_world_spawn_complete, process_loaded_maps, process_loaded_worlds};

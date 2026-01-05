@@ -68,6 +68,10 @@ pub mod plugin;
 pub use bevy_tiledmap_assets as assets;
 pub use bevy_tiledmap_core as core;
 
+// Re-export crates needed for TiledClass macro
+pub use inventory;
+pub use tiled;
+
 #[cfg(feature = "tilemap")]
 pub use bevy_tiledmap_tilemap as tilemap;
 

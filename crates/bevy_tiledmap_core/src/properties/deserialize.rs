@@ -148,6 +148,31 @@ impl FromTiledProperty for Vec3 {
     }
 }
 
+impl FromTiledProperty for IVec2 {
+    fn from_property(value: &PropertyValue) -> Option<Self> {
+        match value {
+            PropertyValue::StringValue(s) => {
+                // Parse "x,y" format
+                let parts: Vec<&str> = s.split(',').collect();
+                if parts.len() == 2 {
+                    let x = parts[0].trim().parse::<i32>().ok()?;
+                    let y = parts[1].trim().parse::<i32>().ok()?;
+                    Some(IVec2::new(x, y))
+                } else {
+                    None
+                }
+            }
+            PropertyValue::ClassValue { properties, .. } => {
+                // Parse from class with x, y fields
+                let x = properties.get("x").and_then(|v| i32::from_property(v))?;
+                let y = properties.get("y").and_then(|v| i32::from_property(v))?;
+                Some(IVec2::new(x, y))
+            }
+            _ => None,
+        }
+    }
+}
+
 // Option<T> implementation
 impl<T: FromTiledProperty> FromTiledProperty for Option<T> {
     fn from_property(value: &PropertyValue) -> Option<Self> {

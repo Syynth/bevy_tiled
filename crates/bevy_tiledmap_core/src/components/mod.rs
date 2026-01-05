@@ -9,7 +9,7 @@ pub mod tile;
 pub use layer::{ImageLayerData, LayerId, TiledLayer};
 pub use map::{
     LayersInMap, MapGeometry, MapsInWorld, ObjectsInMap, TiledLayerMapOf, TiledMap,
-    TiledObjectMapOf, TiledWorld, TiledWorldOf,
+    TiledObjectMapOf, TiledSceneRoot, TiledWorld, TiledWorldOf,
 };
 pub use object::{ObjectId, TiledObject};
 pub use tile::{TileInstance, TileLayerData};

@@ -112,3 +112,51 @@ pub struct GroupLayerSpawned {
     /// Layer properties
     pub properties: Properties,
 }
+
+/// Fired when a map's entity hierarchy is fully spawned.
+///
+/// This event is triggered after all layers and objects have been created
+/// for a map. Use this for initialization that requires the complete map
+/// structure to be in place.
+///
+/// This is an `EntityEvent` that can be observed on the spawned entity.
+///
+/// # Example
+///
+/// ```ignore
+/// commands.spawn(TiledMap { ... })
+///     .observe(|trigger: On<MapSpawned>, mut readiness: ResMut<GameReadiness>| {
+///         info!("Map fully loaded: {:?}", trigger.event().entity);
+///         readiness.map_ready = true;
+///     });
+/// ```
+#[derive(EntityEvent, Debug, Clone)]
+pub struct MapSpawned {
+    /// The map entity
+    #[event_target]
+    pub entity: Entity,
+}
+
+/// Fired when a world and all its maps are fully spawned.
+///
+/// This event is triggered after the world entity and all child map entities
+/// have been fully processed. Use this for initialization that requires
+/// the entire world structure to be in place.
+///
+/// This is an `EntityEvent` that can be observed on the spawned entity.
+///
+/// # Example
+///
+/// ```ignore
+/// commands.spawn(TiledWorld { ... })
+///     .observe(|trigger: On<WorldSpawned>, mut readiness: ResMut<GameReadiness>| {
+///         info!("World fully loaded: {:?}", trigger.event().entity);
+///         readiness.world_ready = true;
+///     });
+/// ```
+#[derive(EntityEvent, Debug, Clone)]
+pub struct WorldSpawned {
+    /// The world entity
+    #[event_target]
+    pub entity: Entity,
+}
