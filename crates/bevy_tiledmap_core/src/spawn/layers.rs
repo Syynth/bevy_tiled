@@ -5,6 +5,7 @@ use tiled::LayerType;
 
 use crate::components::{LayerId, TiledLayer, TiledLayerMapOf};
 use crate::events::{TileLayerSpawned, ObjectLayerSpawned, ImageLayerSpawned, GroupLayerSpawned};
+use crate::plugin::LayerZConfig;
 use crate::spawn::{build_image_layer_data, build_tile_layer_data, spawn_objects_layer};
 use crate::systems::SpawnContext;
 
@@ -13,6 +14,13 @@ use crate::systems::SpawnContext;
 /// Dispatches to type-specific spawning functions based on layer type.
 /// Triggers appropriate layer spawned events for Layer 3 integration via observers.
 ///
+/// # Z-Ordering
+///
+/// Content layers (tiles, objects, images) get sequential z values:
+/// `z = config.offset + (counter * config.multiplier)`
+///
+/// Group layers get z=0 (they don't contribute to z-ordering, only their children do).
+///
 /// # Arguments
 ///
 /// * `commands` - Bevy commands for entity spawning
@@ -20,6 +28,8 @@ use crate::systems::SpawnContext;
 /// * `map_entity` - Parent map entity (for relationship)
 /// * `context` - Spawn context for asset access
 /// * `type_registry` - App type registry for reflection-based component insertion
+/// * `z_counter` - Mutable counter for flat z-ordering across all content layers
+/// * `z_config` - Configuration for z offset and multiplier
 ///
 /// # Returns
 ///
@@ -30,6 +40,8 @@ pub fn spawn_layer(
     map_entity: Entity,
     context: &SpawnContext,
     type_registry: &AppTypeRegistry,
+    z_counter: &mut usize,
+    z_config: &LayerZConfig,
 ) -> Entity {
     let layer_type = match layer.layer_type() {
         LayerType::Tiles(_) => TiledLayer::Tiles,
@@ -38,11 +50,20 @@ pub fn spawn_layer(
         LayerType::Group(_) => TiledLayer::Group,
     };
 
+    // Calculate Z value: groups get 0, content layers get sequential z values
+    let z = if matches!(layer.layer_type(), LayerType::Group(_)) {
+        0.0
+    } else {
+        let z = z_config.offset + (*z_counter as f32) * z_config.multiplier;
+        *z_counter += 1;
+        z
+    };
+
     // Calculate layer transform (offset, parallax will be added in Phase 3)
     let transform = Transform::from_xyz(
         layer.offset_x,
-        -layer.offset_y,   // Invert Y
-        layer.id() as f32, // Use layer ID as Z for ordering
+        -layer.offset_y, // Invert Y
+        z,
     );
 
     // Spawn base layer entity and get ID immediately
@@ -106,11 +127,14 @@ pub fn spawn_layer(
         }
 
         LayerType::Group(group) => {
-            // Recursively spawn child layers
+            // Recursively spawn child layers, skipping hidden ones
             let mut child_layer_entities = Vec::new();
             for child_layer in group.layers() {
+                if !child_layer.visible {
+                    continue;
+                }
                 let child_entity =
-                    spawn_layer(commands, &child_layer, map_entity, context, type_registry);
+                    spawn_layer(commands, &child_layer, map_entity, context, type_registry, z_counter, z_config);
                 child_layer_entities.push(child_entity);
             }
             if !child_layer_entities.is_empty() {

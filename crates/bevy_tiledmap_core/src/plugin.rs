@@ -7,6 +7,30 @@ use bevy::prelude::*;
 use crate::properties::{TiledClassRegistry, export_all_types_with_reflection};
 use crate::systems::{check_world_spawn_complete, process_loaded_maps, process_loaded_worlds};
 
+/// Configuration for layer Z-ordering.
+///
+/// Controls how layer Z values are calculated for proper rendering order.
+/// Z value = offset + (layer_index * multiplier)
+///
+/// Groups don't contribute to Z - only actual content layers (tiles, objects, images)
+/// are counted, giving flat Z-spacing across the entire layer hierarchy.
+#[derive(Resource, Debug, Clone)]
+pub struct LayerZConfig {
+    /// Base Z offset for all layers
+    pub offset: f32,
+    /// Multiplier for layer index spacing
+    pub multiplier: f32,
+}
+
+impl Default for LayerZConfig {
+    fn default() -> Self {
+        Self {
+            offset: 0.0,
+            multiplier: 1.0,
+        }
+    }
+}
+
 /// Configuration for `TiledmapCorePlugin`.
 ///
 /// # Example
@@ -95,6 +119,9 @@ impl Plugin for TiledmapCorePlugin {
 
         // Insert registry as a resource
         app.insert_resource(registry);
+
+        // Insert default layer Z config (can be overridden by user)
+        app.init_resource::<LayerZConfig>();
 
         // Schedule type export at startup if configured
         // Must be done at startup to have access to AppTypeRegistry for reflection

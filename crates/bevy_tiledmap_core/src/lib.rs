@@ -66,7 +66,7 @@ pub mod prelude {
         GroupLayerSpawned, ImageLayerSpawned, MapSpawned, ObjectLayerSpawned, ObjectSpawned,
         TileLayerSpawned, WorldSpawned,
     };
-    pub use crate::plugin::{TiledmapCoreConfig, TiledmapCorePlugin};
+    pub use crate::plugin::{LayerZConfig, TiledmapCoreConfig, TiledmapCorePlugin};
     pub use crate::properties::{FromTiledProperty, MergedProperties, TiledClassRegistry};
 
     // Re-export the TiledClass derive macro
@@ -74,4 +74,4 @@ pub mod prelude {
 }
 
 // Re-export plugin types at crate root for convenience
-pub use plugin::{TiledmapCoreConfig, TiledmapCorePlugin};
+pub use plugin::{LayerZConfig, TiledmapCoreConfig, TiledmapCorePlugin};

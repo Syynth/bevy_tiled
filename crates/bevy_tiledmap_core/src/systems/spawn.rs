@@ -6,6 +6,7 @@ use bevy_tiledmap_assets::prelude::{TiledMapAsset, TiledTilesetAsset, TiledWorld
 
 use crate::components::{MapsInWorld, TiledMap, TiledWorld, TiledWorldOf};
 use crate::events::{MapSpawned, WorldSpawned};
+use crate::plugin::LayerZConfig;
 use crate::spawn::spawn_map;
 use crate::systems::SpawnContext;
 
@@ -36,6 +37,7 @@ pub fn process_loaded_maps(
     template_assets: Res<Assets<bevy_tiledmap_assets::prelude::TiledTemplateAsset>>,
     registry: Res<crate::properties::TiledClassRegistry>,
     type_registry: Res<AppTypeRegistry>,
+    z_config: Res<LayerZConfig>,
     mut commands: Commands,
     mut map_query: Query<(Entity, &TiledMap), Or<(Without<crate::components::LayersInMap>, With<RespawnTiledMap>)>>,
 ) {
@@ -81,7 +83,7 @@ pub fn process_loaded_maps(
         let context = SpawnContext::new(map_asset, &tileset_assets, &template_assets, &registry, &asset_server);
 
         // Spawn the map hierarchy
-        spawn_map(&mut commands, map_entity, &context, &type_registry);
+        spawn_map(&mut commands, map_entity, &context, &type_registry, &z_config);
 
         info!("Map hierarchy spawned successfully");
 

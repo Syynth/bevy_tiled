@@ -3,6 +3,7 @@
 use bevy::prelude::*;
 
 use crate::components::{LayersInMap, MapGeometry};
+use crate::plugin::LayerZConfig;
 use crate::spawn::spawn_layer;
 use crate::systems::SpawnContext;
 
@@ -20,17 +21,24 @@ use crate::systems::SpawnContext;
 /// * `map_entity` - The entity with the `TiledMap` component
 /// * `context` - Spawn context with asset data access
 /// * `type_registry` - App type registry for reflection-based component insertion
+/// * `z_config` - Configuration for layer z-ordering
 pub fn spawn_map(
     commands: &mut Commands,
     map_entity: Entity,
     context: &SpawnContext,
     type_registry: &AppTypeRegistry,
+    z_config: &LayerZConfig,
 ) {
     let mut layer_entities = Vec::new();
+    let mut z_counter: usize = 0;
 
     // Spawn each top-level layer (spawn_layer handles recursion for groups)
+    // Skip hidden layers - they won't be spawned at all
     for layer in context.map_asset.map.layers() {
-        let layer_entity = spawn_layer(commands, &layer, map_entity, context, type_registry);
+        if !layer.visible {
+            continue;
+        }
+        let layer_entity = spawn_layer(commands, &layer, map_entity, context, type_registry, &mut z_counter, z_config);
         layer_entities.push(layer_entity);
     }
 
