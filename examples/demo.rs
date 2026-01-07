@@ -23,7 +23,7 @@ fn main() {
         .add_plugins(DefaultPlugins)
         // Add Avian2D physics with debug rendering
         .add_plugins(PhysicsPlugins::default())
-        .add_plugins(PhysicsDebugPlugin::default())
+        .add_plugins(PhysicsDebugPlugin)
         // Add bevy_tiledmap with type export
         .add_plugins(BevyTiledmapPlugin {
             core: TiledmapCoreConfig {
@@ -109,7 +109,7 @@ fn fit_camera_to_map(
     windows: Query<&Window>,
 ) {
     for geometry in &map_query {
-        let Ok((mut transform, mut camera)) = camera_query.single_mut() else {
+        let Ok((mut transform, _)) = camera_query.single_mut() else {
             return;
         };
         let Ok(window) = windows.single() else {
@@ -125,7 +125,7 @@ fn fit_camera_to_map(
         let window_size = Vec2::new(window.width(), window.height());
         let scale_x = map_size.x / window_size.x;
         let scale_y = map_size.y / window_size.y;
-        let scale = scale_x.max(scale_y) * 1.1; // 10% padding
+        let _scale = scale_x.max(scale_y) * 1.1; // 10% padding
 
         // camera.orthographic_mut().unwrap().scale = scale;
     }

@@ -189,8 +189,16 @@ pub fn process_loaded_worlds(
                 .to_string();
 
             // Calculate the position from the world map coordinates
-            // Tiled uses top-left origin, so we need to adjust Y coordinate
-            let position = Vec3::new(world_map.x as f32, -(world_map.y as f32), 0.0);
+            // Tiled uses top-left origin with Y-down: (x, y) is the top-left corner
+            // Bevy uses Y-up with our map content starting at local (0, 0) = bottom-left
+            // So we position the map entity at the BOTTOM of where the map should be:
+            // bevy_y = -(tiled_y + map_height)
+            let map_height = world_map.height.unwrap_or(0) as f32;
+            let position = Vec3::new(
+                world_map.x as f32,
+                -(world_map.y as f32 + map_height),
+                0.0,
+            );
 
             info!(
                 "Spawning map '{}' at position {:?}",

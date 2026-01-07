@@ -184,7 +184,7 @@ impl MapGeometry {
     /// Convert a tile grid coordinate to world-space position (center of tile).
     ///
     /// Uses Tiled's coordinate system for input (y=0 is top row).
-    /// Returns the center position of the tile in Bevy world space.
+    /// Returns the center position of the tile in Bevy world space (local to the map entity).
     ///
     /// Returns `None` if the tile coordinate is out of bounds.
     pub fn tile_to_world(&self, tile_x: u32, tile_y: u32) -> Option<Vec2> {
