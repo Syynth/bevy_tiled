@@ -17,6 +17,7 @@ use bevy::prelude::*;
 use bevy_inspector_egui::{bevy_egui::EguiPlugin, quick::WorldInspectorPlugin};
 use bevy_tiledmap::prelude::*;
 use bevy_tiledmap_core::components::map::MapGeometry;
+use bevy_tiledmap_core::project::TiledProjectProperties;
 
 fn main() {
     App::new()
@@ -24,10 +25,11 @@ fn main() {
         // Add Avian2D physics with debug rendering
         .add_plugins(PhysicsPlugins::default())
         .add_plugins(PhysicsDebugPlugin)
-        // Add bevy_tiledmap with type export
+        // Add bevy_tiledmap with type export and project loading
         .add_plugins(BevyTiledmapPlugin {
             core: TiledmapCoreConfig {
                 export_types_path: Some("assets/tiled_types.json".into()),
+                project_path: Some("everything.tiled-project".into()),
             },
             ..default()
         })
@@ -37,7 +39,12 @@ fn main() {
         .add_systems(Startup, (setup_camera, spawn_map))
         .add_systems(
             Update,
-            (player_movement, fit_camera_to_map, draw_map_bounds_gizmos),
+            (
+                player_movement,
+                fit_camera_to_map,
+                draw_map_bounds_gizmos,
+                log_project_properties.run_if(resource_changed::<TiledProjectProperties>),
+            ),
         )
         .run();
 }
@@ -128,6 +135,28 @@ fn fit_camera_to_map(
         let _scale = scale_x.max(scale_y) * 1.1; // 10% padding
 
         // camera.orthographic_mut().unwrap().scale = scale;
+    }
+}
+
+/// Log the loaded project properties to verify loading works
+fn log_project_properties(project_props: Res<TiledProjectProperties>) {
+    // Only log when we have actual data (asset has loaded)
+    if project_props.classes().count() == 0 && project_props.enums().count() == 0 {
+        return;
+    }
+
+    info!("📦 Tiled Project Properties loaded:");
+    for class in project_props.classes() {
+        info!("  Class: {} ({} members)", class.name, class.members.len());
+        for member in &class.members {
+            info!("    - {}: {} = {:?}", member.name, member.member_type, member.value);
+        }
+    }
+    for enum_def in project_props.enums() {
+        info!("  Enum: {} ({} values)", enum_def.name, enum_def.values.len());
+        for value in &enum_def.values {
+            info!("    - {}", value);
+        }
     }
 }
 

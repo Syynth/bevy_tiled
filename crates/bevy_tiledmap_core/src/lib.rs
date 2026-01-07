@@ -52,6 +52,7 @@ pub mod components;
 pub mod debug;
 pub mod events;
 pub mod plugin;
+pub mod project;
 pub mod properties;
 pub mod spawn;
 pub mod systems;
@@ -69,6 +70,7 @@ pub mod prelude {
         TileLayerSpawned, WorldSpawned,
     };
     pub use crate::plugin::{LayerZConfig, TiledmapCoreConfig, TiledmapCorePlugin};
+    pub use crate::project::{ProjectDeserializeError, TiledProjectProperties};
     pub use crate::properties::{FromTiledProperty, MergedProperties, TiledClassRegistry};
 
     // Re-export the TiledClass derive macro
