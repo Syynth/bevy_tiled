@@ -334,7 +334,7 @@ fn collect_layer_properties(
         }
     }
 
-    collect_from_layers(map.layers(), load_context, layer_properties)
+    collect_from_layers(map.layers(), load_context, layer_properties);
 }
 
 /// Recursively collect object properties from all object layers including nested groups.
@@ -364,7 +364,7 @@ fn collect_object_properties(
         }
     }
 
-    collect_from_layers(map.layers(), load_context, object_properties)
+    collect_from_layers(map.layers(), load_context, object_properties);
 }
 
 /// Resolve relative path from Tiled file to Bevy asset path
@@ -415,13 +415,13 @@ fn resolve_relative_path(
     Ok(asset_path)
 }
 
-/// Normalize all FileValue paths in properties to be asset-root-relative.
+/// Normalize all `FileValue` paths in properties to be asset-root-relative.
 ///
 /// Tiled stores file references as relative paths (e.g., `../transitions/fade.toml`).
-/// Bevy's AssetServer rejects paths with `..` components for security reasons.
+/// Bevy's `AssetServer` rejects paths with `..` components for security reasons.
 /// This function resolves relative paths to absolute asset-root-relative paths.
 ///
-/// Handles nested ClassValue properties recursively.
+/// Handles nested `ClassValue` properties recursively.
 ///
 /// # Arguments
 /// * `properties` - The properties map to normalize (modified in place)
@@ -432,7 +432,7 @@ fn normalize_property_paths(properties: &mut tiled::Properties, load_context: &L
     }
 }
 
-/// Normalize a single PropertyValue, handling FileValue and nested ClassValue.
+/// Normalize a single `PropertyValue`, handling `FileValue` and nested `ClassValue`.
 fn normalize_property_value(value: &mut tiled::PropertyValue, load_context: &LoadContext) {
     match value {
         tiled::PropertyValue::FileValue(path) => {

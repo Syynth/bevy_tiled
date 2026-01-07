@@ -27,7 +27,7 @@ pub enum TiledTypeKind {
     Color,
     /// File type (asset path for `Handle<T>` fields)
     ///
-    /// When deserialized, this triggers asset loading via AssetServer.
+    /// When deserialized, this triggers asset loading via `AssetServer`.
     File,
     /// Class type (custom type with properties)
     ///
@@ -206,9 +206,7 @@ impl TiledEnumInfo {
     pub fn get_variant(&self, name: &str) -> Option<&TiledVariantInfo> {
         match &self.kind {
             TiledEnumKind::Simple { .. } => None,
-            TiledEnumKind::Complex { variant_info } => {
-                variant_info.iter().find(|v| v.name == name)
-            }
+            TiledEnumKind::Complex { variant_info } => variant_info.iter().find(|v| v.name == name),
         }
     }
 

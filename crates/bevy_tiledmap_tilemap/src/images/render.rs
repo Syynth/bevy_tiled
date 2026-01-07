@@ -11,7 +11,7 @@ use bevy_tiledmap_core::events::ImageLayerSpawned;
 /// 1. Reads the `ImageLayerData` component
 /// 2. Creates a Sprite with the image
 /// 3. Adjusts transform to use Bevy coordinates (positive Y)
-/// 4. Sets anchor to BottomLeft (images extend up and right in Bevy's Y-up space)
+/// 4. Sets anchor to `BottomLeft` (images extend up and right in Bevy's Y-up space)
 pub fn on_image_layer_spawned(
     trigger: On<ImageLayerSpawned>,
     layer_query: Query<(&ImageLayerData, &Transform, Option<&Name>)>,
@@ -45,10 +45,13 @@ pub fn on_image_layer_spawned(
         Vec3::ONE
     };
 
-    // Adjust Y position using MapGeometry pattern: bevy_y = map_height - tiled_y
-    // The layer transform currently has Y = -offset_y (relative coords)
-    // We need Y = map_pixel_height + (-offset_y) = map_pixel_height - offset_y
-    let adjusted_y = image_data.map_pixel_height + transform.translation.y;
+    // Convert Tiled Y-down coordinates to Bevy Y-up coordinates
+    // Tiled offset_y=0 means image is at the TOP of the map
+    // With BottomLeft anchor, the bottom edge of the image should be at:
+    //   map_pixel_height - image_height + offset adjustment
+    // Since transform.translation.y = -offset_y, we get:
+    let image_height = image_data.height.unwrap_or(0.0);
+    let adjusted_y = image_data.map_pixel_height - image_height + transform.translation.y;
 
     // Insert sprite component with adjusted transform
     // BottomLeft anchor means images extend up and right from their position
@@ -66,5 +69,8 @@ pub fn on_image_layer_spawned(
         },
     ));
 
-    info!("Created sprite for image layer at adjusted Y={}", adjusted_y);
+    info!(
+        "Created sprite for image layer at adjusted Y={}",
+        adjusted_y
+    );
 }

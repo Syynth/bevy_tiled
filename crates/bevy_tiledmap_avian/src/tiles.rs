@@ -126,7 +126,9 @@ fn generate_merged_compound_collider(
         }
 
         // Check if it's a simple rectangle (can be merged)
-        if let Some((width, height)) = shapes::get_tile_rectangle_collision_size(tileset, tile_instance.tile_id) {
+        if let Some((width, height)) =
+            shapes::get_tile_rectangle_collision_size(tileset, tile_instance.tile_id)
+        {
             // Rectangular collision - can be merged
             let key = TileCollisionKey {
                 tileset_id: tile_instance.tileset_handle.id(),
@@ -175,10 +177,9 @@ fn generate_merged_compound_collider(
     if !merged_colliders.is_empty() {
         let total_shapes = merged_colliders.len();
 
-        commands.entity(layer_entity).insert((
-            RigidBody::Static,
-            Collider::compound(merged_colliders),
-        ));
+        commands
+            .entity(layer_entity)
+            .insert((RigidBody::Static, Collider::compound(merged_colliders)));
 
         info!(
             "Generated compound collider with {} shapes (merged {} rectangular tiles into {} rectangles, {} custom shapes)",
@@ -225,7 +226,7 @@ struct TileCollisionKey {
 /// # Returns
 ///
 /// Vector of (`center_position`, size) for each merged rectangle.
-/// Uses positive Y with Y-flip to match MapGeometry bounds.
+/// Uses positive Y with Y-flip to match `MapGeometry` bounds.
 fn merge_rectangular_tiles_into_strips(
     positions: Vec<(u32, u32)>,
     tile_size: Vec2,
@@ -337,8 +338,11 @@ mod tests {
     fn test_merge_l_shape() {
         // L-shaped pattern - should create 2 rectangles
         let positions = vec![
-            (0, 0), (1, 0), (2, 0), // Horizontal part
-            (0, 1), (0, 2), // Vertical part
+            (0, 0),
+            (1, 0),
+            (2, 0), // Horizontal part
+            (0, 1),
+            (0, 2), // Vertical part
         ];
         let tile_size = Vec2::new(16.0, 16.0);
         let map_height = 10;

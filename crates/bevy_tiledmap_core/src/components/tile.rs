@@ -110,29 +110,29 @@ impl TileLayerData {
 
     /// Iterate all non-empty tiles with their world positions.
     ///
-    /// Returns `(world_pos, tile_instance)` tuples where world_pos is the center
+    /// Returns `(world_pos, tile_instance)` tuples where `world_pos` is the center
     /// of the tile in Bevy's coordinate system (Y-up, bottom-left origin).
     ///
     /// This is the recommended iterator for Layer 3 physics plugins.
-    pub fn iter_tiles_world(
-        &self,
-        tile_size: Vec2,
-    ) -> impl Iterator<Item = (Vec2, &TileInstance)> {
+    pub fn iter_tiles_world(&self, tile_size: Vec2) -> impl Iterator<Item = (Vec2, &TileInstance)> {
         let width = self.width;
         let height = self.height;
-        self.tiles.iter().enumerate().filter_map(move |(idx, tile)| {
-            tile.as_ref().map(|t| {
-                let x = (idx as u32) % width;
-                let y = (idx as u32) / width;
-                // Flip Y: Tiled y=0 is top row, which maps to highest Y in Bevy
-                let flipped_y = height - 1 - y;
-                let world_pos = Vec2::new(
-                    (x as f32 + 0.5) * tile_size.x,
-                    (flipped_y as f32 + 0.5) * tile_size.y,
-                );
-                (world_pos, t)
+        self.tiles
+            .iter()
+            .enumerate()
+            .filter_map(move |(idx, tile)| {
+                tile.as_ref().map(|t| {
+                    let x = (idx as u32) % width;
+                    let y = (idx as u32) / width;
+                    // Flip Y: Tiled y=0 is top row, which maps to highest Y in Bevy
+                    let flipped_y = height - 1 - y;
+                    let world_pos = Vec2::new(
+                        (x as f32 + 0.5) * tile_size.x,
+                        (flipped_y as f32 + 0.5) * tile_size.y,
+                    );
+                    (world_pos, t)
+                })
             })
-        })
     }
 }
 

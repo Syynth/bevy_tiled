@@ -6,7 +6,7 @@
 use bevy::app::App;
 use bevy::asset::AssetServer;
 use bevy::prelude::*;
-use bevy::reflect::{ReflectMut, TypeInfo, TypeRegistry, TypeRegistration};
+use bevy::reflect::{ReflectMut, TypeInfo, TypeRegistration, TypeRegistry};
 use tiled::{Properties, PropertyValue};
 
 use super::registry::TiledClassRegistry;
@@ -165,8 +165,8 @@ impl FromTiledProperty for IVec2 {
             }
             PropertyValue::ClassValue { properties, .. } => {
                 // Parse from class with x, y fields
-                let x = properties.get("x").and_then(|v| i32::from_property(v))?;
-                let y = properties.get("y").and_then(|v| i32::from_property(v))?;
+                let x = properties.get("x").and_then(i32::from_property)?;
+                let y = properties.get("y").and_then(i32::from_property)?;
                 Some(IVec2::new(x, y))
             }
             _ => None,

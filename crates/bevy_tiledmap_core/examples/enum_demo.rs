@@ -94,7 +94,7 @@ fn export_types(app: &App) {
 
     // Export using the hybrid approach (TiledClass + Reflection)
     match bevy_tiledmap_core::properties::export::export_all_types_with_reflection(
-        app,
+        app.world(),
         "custom-types.json",
     ) {
         Ok(()) => {

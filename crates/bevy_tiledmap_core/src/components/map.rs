@@ -162,13 +162,14 @@ pub struct MapGeometry {
     pub tile_size: Vec2,
     /// World-space bounding rectangle of the map.
     /// - `min` is at (0, 0) - bottom-left corner
-    /// - `max` is at (width * tile_width, height * tile_height) - top-right corner
+    /// - `max` is at `(width * tile_width, height * tile_height)` - top-right corner
+    ///
     /// Use this directly for `.intersect()`, `.contains()`, etc.
     pub bounds: Rect,
 }
 
 impl MapGeometry {
-    /// Create a new MapGeometry from map dimensions.
+    /// Create a new `MapGeometry` from map dimensions.
     pub fn new(width: u32, height: u32, tile_width: f32, tile_height: f32) -> Self {
         Self {
             size: UVec2::new(width, height),

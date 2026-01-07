@@ -220,9 +220,6 @@ impl TilemapBuilder {
         // Create tile storage
         let mut tile_storage = TileStorage::empty(map_size);
 
-        // Capture count before consuming the vector
-        let tile_count = tiles.len();
-
         // Spawn empty tilemap entity first (following bevy_ecs_tilemap pattern)
         let tilemap_entity = commands.spawn_empty().id();
 

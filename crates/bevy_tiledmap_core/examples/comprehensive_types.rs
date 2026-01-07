@@ -21,7 +21,7 @@ fn main() {
 
     // Run the app to trigger the Startup system that exports types
     app.update();
-    println!("✅ Type definitions exported to tiled_types.json");
+    info!("✅ Type definitions exported to tiled_types.json");
     info!("   (workspace root: assets/tiled_types.json)");
     info!("Import this file into Tiled for autocomplete on custom properties.");
     info!("Next steps:");
@@ -159,7 +159,7 @@ pub struct SpawnSettings {
 #[reflect(Component)]
 #[tiled(name = "Waypoint")]
 pub struct Waypoint {
-    /// Target position (tests glam::IVec2 discovery via reflection)
+    /// Target position (tests `glam::IVec2` discovery via reflection)
     #[tiled(default)]
     pub target_tile: IVec2,
 
@@ -167,7 +167,7 @@ pub struct Waypoint {
     #[tiled(default = 100.0)]
     pub speed: f32,
 
-    /// Optional offset (tests glam::Vec2 discovery via reflection)
+    /// Optional offset (tests `glam::Vec2` discovery via reflection)
     pub offset: Option<Vec2>,
 }
 

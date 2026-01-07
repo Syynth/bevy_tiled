@@ -47,7 +47,7 @@ fn exit_after_export(mut exit: MessageWriter<AppExit>) {
 }
 
 // Example component: Door with various property types
-#[derive(Component, Reflect, TiledClass)]
+#[derive(Component, Reflect, Default, TiledClass)]
 #[reflect(Component)]
 #[tiled(name = "game::Door")]
 struct Door {
@@ -75,7 +75,7 @@ enum DoorState {
 }
 
 // Example component: Enemy with different property types
-#[derive(Component, Reflect, TiledClass)]
+#[derive(Component, Reflect, Default, TiledClass)]
 #[reflect(Component)]
 #[tiled(name = "game::Enemy")]
 struct Enemy {
@@ -90,7 +90,7 @@ struct Enemy {
 }
 
 // Example component: Item with string and vector properties
-#[derive(Component, Reflect, TiledClass)]
+#[derive(Component, Reflect, Default, TiledClass)]
 #[reflect(Component)]
 #[tiled(name = "game::Item")]
 struct Item {
@@ -105,7 +105,7 @@ struct Item {
 }
 
 // Example component: Trigger zone with boolean flags
-#[derive(Component, Reflect, TiledClass)]
+#[derive(Component, Reflect, Default, TiledClass)]
 #[reflect(Component)]
 #[tiled(name = "game::Trigger")]
 struct Trigger {

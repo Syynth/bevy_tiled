@@ -77,8 +77,8 @@ pub fn on_object_spawned(
             // Merge properties: tile props (base) → collision props → object props (override)
             let merged_props = merge_tile_object_properties(
                 tileset.tile_properties.get(tile_id), // base
-                collision_props,                       // per-collision-object
-                &event.properties,                     // instance override
+                collision_props,                      // per-collision-object
+                &event.properties,                    // instance override
             );
 
             // Resolve physics_settings from merged properties
@@ -162,7 +162,7 @@ pub fn on_object_spawned(
 /// Resolve `PhysicsSettings` from object properties.
 ///
 /// Scans all properties for any with type `avian::PhysicsSettings`.
-/// The property can have any name (e.g., "physics_settings", "collider", etc.)
+/// The property can have any name (e.g., `"physics_settings"`, `"collider"`, etc.)
 ///
 /// This implements the opt-in filtering - only objects with this property get colliders.
 fn resolve_physics_settings(

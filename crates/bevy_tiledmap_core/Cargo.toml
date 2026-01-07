@@ -7,7 +7,7 @@ description = "Entity spawning backbone for bevy_tiled - converts Tiled assets t
 repository = "https://github.com/yourusername/bevy_tiled"
 
 [dependencies]
-bevy = { version = "0.17", default-features = false, features = ["bevy_asset", "bevy_log"] }
+bevy = { version = "0.17", default-features = false, features = ["bevy_asset", "bevy_log", "bevy_gizmos"] }
 bevy_tiledmap_assets = { path = "../bevy_tiledmap_assets" }
 bevy_tiledmap_macros = { path = "../bevy_tiledmap_macros" }
 inventory = "0.3"

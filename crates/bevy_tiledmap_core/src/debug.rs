@@ -1,6 +1,7 @@
 //! Debug visualization for Tiled maps.
 
 use bevy::prelude::*;
+use bevy::gizmos::gizmos::Gizmos;
 
 use crate::components::map::MapGeometry;
 

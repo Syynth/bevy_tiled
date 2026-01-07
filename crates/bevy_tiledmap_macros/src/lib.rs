@@ -11,7 +11,7 @@ use syn::{
     parse_macro_input, punctuated::Punctuated, token::Comma,
 };
 
-/// Get the path tokens for bevy_tiledmap crate (either umbrella or core).
+/// Get the path tokens for `bevy_tiledmap` crate (either umbrella or core).
 /// Returns tokens for accessing properties module and other re-exports.
 fn get_crate_paths() -> (
     proc_macro2::TokenStream,
@@ -117,7 +117,9 @@ fn derive_tiled_class_impl(input: DeriveInput) -> syn::Result<TokenStream> {
         Data::Struct(data) => {
             // Handle struct (including unit structs)
             match &data.fields {
-                Fields::Named(fields) => handle_struct(type_name, &tiled_name, &fields.named, &paths),
+                Fields::Named(fields) => {
+                    handle_struct(type_name, &tiled_name, &fields.named, &paths)
+                }
                 Fields::Unit => handle_unit_struct(type_name, &tiled_name, &paths),
                 Fields::Unnamed(_) => Err(syn::Error::new_spanned(
                     type_name,
@@ -309,7 +311,11 @@ fn handle_struct(
 }
 
 /// Handle unit struct (no fields) - used as marker components
-fn handle_unit_struct(struct_name: &syn::Ident, tiled_name: &str, paths: &CratePaths) -> syn::Result<TokenStream> {
+fn handle_unit_struct(
+    struct_name: &syn::Ident,
+    tiled_name: &str,
+    paths: &CratePaths,
+) -> syn::Result<TokenStream> {
     // Generate static field metadata array (empty for unit structs)
     let fields_array_name =
         quote::format_ident!("__TILED_FIELDS_{}", struct_name.to_string().to_uppercase());
@@ -642,7 +648,8 @@ fn generate_complex_enum_impl(
     let tiled = &paths.tiled;
 
     // Generate field metadata arrays for each variant
-    let variant_metadata_arrays = generate_variant_metadata_arrays(enum_name, &analysis.variants, paths)?;
+    let variant_metadata_arrays =
+        generate_variant_metadata_arrays(enum_name, &analysis.variants, paths)?;
 
     // Generate FromTiledProperty implementation
     let from_property_impl =
@@ -1150,10 +1157,10 @@ fn extract_type_name(type_path: &syn::TypePath) -> String {
 
 /// Check if a type is `Handle<T>`.
 fn is_handle_type(ty: &Type) -> bool {
-    if let Type::Path(type_path) = ty {
-        if let Some(segment) = type_path.path.segments.last() {
-            return segment.ident == "Handle";
-        }
+    if let Type::Path(type_path) = ty
+        && let Some(segment) = type_path.path.segments.last()
+    {
+        return segment.ident == "Handle";
     }
     false
 }

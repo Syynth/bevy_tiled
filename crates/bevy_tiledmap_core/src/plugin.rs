@@ -11,7 +11,7 @@ use crate::systems::{check_world_spawn_complete, process_loaded_maps, process_lo
 /// Configuration for layer Z-ordering.
 ///
 /// Controls how layer Z values are calculated for proper rendering order.
-/// Z value = offset + (layer_index * multiplier)
+/// Z value = `offset + (layer_index * multiplier)`
 ///
 /// Groups don't contribute to Z - only actual content layers (tiles, objects, images)
 /// are counted, giving flat Z-spacing across the entire layer hierarchy.
@@ -136,7 +136,12 @@ impl Plugin for TiledmapCorePlugin {
         // check_world_spawn_complete runs after maps are processed to fire WorldSpawned events
         app.add_systems(
             PreUpdate,
-            (process_loaded_worlds, process_loaded_maps, check_world_spawn_complete).chain(),
+            (
+                process_loaded_worlds,
+                process_loaded_maps,
+                check_world_spawn_complete,
+            )
+                .chain(),
         );
 
         // Enable debug visualization by default (remove this line to disable)

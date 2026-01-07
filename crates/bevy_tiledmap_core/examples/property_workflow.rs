@@ -78,7 +78,7 @@ fn simulate_object_spawn(world: &mut World, component_type: &str, props: tiled::
     // This is what happens internally in spawn_objects_layer
     let registry = world.resource::<TiledClassRegistry>();
     if let Some(info) = registry.get(component_type) {
-        match (info.from_properties)(&props) {
+        match (info.from_properties)(&props, None) {
             Ok(component_box) => {
                 info!("   ✓ Deserialized {} component", component_type);
 
@@ -141,7 +141,7 @@ fn exit_after_demo(mut exit: MessageWriter<AppExit>, mut ran: Local<bool>) {
 // Example Component Definitions
 // ============================================================================
 
-#[derive(Component, Reflect, TiledClass, Debug)]
+#[derive(Component, Reflect, Default, TiledClass, Debug)]
 #[reflect(Component)]
 #[tiled(name = "Weapon")]
 pub struct Weapon {
@@ -156,7 +156,7 @@ pub struct Weapon {
     pub ammo: Option<i32>,
 }
 
-#[derive(Component, Reflect, TiledClass, Debug)]
+#[derive(Component, Reflect, Default, TiledClass, Debug)]
 #[reflect(Component)]
 #[tiled(name = "PowerUp")]
 pub struct PowerUp {

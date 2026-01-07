@@ -117,6 +117,7 @@ pub struct RespawnTiledWorld;
 pub fn process_loaded_worlds(
     asset_server: Res<AssetServer>,
     world_assets: Res<Assets<TiledWorldAsset>>,
+    _map_assets: Res<Assets<TiledMapAsset>>,
     mut commands: Commands,
     mut world_query: Query<
         (Entity, &TiledWorld),

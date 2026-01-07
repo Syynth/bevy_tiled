@@ -97,7 +97,8 @@ pub fn spawn_objects_layer(
 
         // Calculate center position in Bevy coordinates (using MapGeometry pattern)
         // Y-flip: Tiled Y=0 (top) → Bevy Y=map_height (top)
-        let map_pixel_height = context.map_asset.map.height as f32 * context.map_asset.map.tile_height as f32;
+        let map_pixel_height =
+            context.map_asset.map.height as f32 * context.map_asset.map.tile_height as f32;
 
         let (center_x, center_y) = if object.tile_data().is_some() {
             // Tile objects: anchor is at BOTTOM-left, tile extends UP
@@ -173,11 +174,11 @@ pub fn spawn_objects_layer(
 /// Attach registered components from class-typed and enum-typed properties.
 ///
 /// Iterates through the object's properties looking for:
-/// 1. Class-typed values (PropertyValue::ClassValue) - deserializes structs
+/// 1. Class-typed values (`PropertyValue::ClassValue`) - deserializes structs
 /// 2. String values that match registered enum types - deserializes enums
 ///
 /// For enum properties, the tiled crate loses the `propertytype` attribute, so we
-/// infer the type from the property key name by converting snake_case to PascalCase.
+/// infer the type from the property key name by converting `snake_case` to `PascalCase`.
 fn attach_registered_components(
     entity_cmd: &mut EntityCommands,
     properties: &tiled::Properties,
@@ -303,7 +304,7 @@ fn attach_registered_components(
     }
 }
 
-/// Convert an ObjectShape to TiledObject.
+/// Convert an `ObjectShape` to `TiledObject`.
 ///
 /// Transforms vertices from Tiled's coordinate system (Y-down) to Bevy's (Y-up).
 /// Vertices are relative to the object's transform position.
@@ -339,8 +340,8 @@ fn convert_object_shape(shape: &ObjectShape) -> TiledObject {
 
 /// Find the tileset for a tile object.
 ///
-/// Tile objects reference tiles via TilesetLocation which can be:
-/// - Map(index) - index into the map's tileset list (matches our HashMap key)
+/// Tile objects reference tiles via `TilesetLocation` which can be:
+/// - Map(index) - index into the map's tileset list (matches our `HashMap` key)
 /// - Template(Arc<Tileset>) - tileset from a template
 fn find_tileset_for_tile_object(
     context: &SpawnContext,
@@ -358,10 +359,10 @@ fn find_tileset_for_tile_object(
         TilesetLocation::Template(tileset_arc) => {
             // Template tileset - find by matching the tileset source path
             for (_tileset_index, tileset_ref) in context.map_asset.tilesets.iter() {
-                if let Some(tileset_asset) = context.tileset_assets.get(&tileset_ref.handle) {
-                    if tileset_asset.tileset.source == tileset_arc.source {
-                        return Some((tileset_ref.handle.clone(), tileset_ref.first_gid));
-                    }
+                if let Some(tileset_asset) = context.tileset_assets.get(&tileset_ref.handle)
+                    && tileset_asset.tileset.source == tileset_arc.source
+                {
+                    return Some((tileset_ref.handle.clone(), tileset_ref.first_gid));
                 }
             }
             None
@@ -395,13 +396,13 @@ fn merge_tile_object_properties(
         }
 
         // Layer 2: Collision object properties (from tileset)
-        if let Some(tile) = tileset.tileset.get_tile(tile_id) {
-            if let Some(collision) = tile.collision.as_ref() {
-                let objects = collision.object_data();
-                if let Some(first_obj) = objects.first() {
-                    for (key, value) in first_obj.properties.iter() {
-                        merged.insert(key.clone(), value.clone());
-                    }
+        if let Some(tile) = tileset.tileset.get_tile(tile_id)
+            && let Some(collision) = tile.collision.as_ref()
+        {
+            let objects = collision.object_data();
+            if let Some(first_obj) = objects.first() {
+                for (key, value) in first_obj.properties.iter() {
+                    merged.insert(key.clone(), value.clone());
                 }
             }
         }
@@ -417,10 +418,10 @@ fn merge_tile_object_properties(
     merged
 }
 
-/// Convert a snake_case string to PascalCase.
+/// Convert a `snake_case` string to `PascalCase`.
 ///
 /// Used to infer enum type names from property keys.
-/// For example: "activation_condition" -> "ActivationCondition"
+/// For example: `"activation_condition"` -> `"ActivationCondition"`
 fn snake_to_pascal_case(s: &str) -> String {
     s.split('_')
         .map(|word| {
@@ -432,4 +433,3 @@ fn snake_to_pascal_case(s: &str) -> String {
         })
         .collect()
 }
-

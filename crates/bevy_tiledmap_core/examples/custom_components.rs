@@ -147,7 +147,7 @@ fn on_object_spawned(trigger: On<ObjectSpawned>, objects: Query<&TiledObject>) {
 // ============================================================================
 
 /// Player component - automatically attached to objects with type `"game::Player"`
-#[derive(Component, Reflect, TiledClass, Debug)]
+#[derive(Component, Reflect, Default, TiledClass, Debug)]
 #[reflect(Component)]
 #[tiled(name = "game::Player")]
 pub struct Player {
@@ -168,7 +168,7 @@ pub struct Player {
 }
 
 /// Enemy component - automatically attached to objects with type `"game::Enemy"`
-#[derive(Component, Reflect, TiledClass, Debug)]
+#[derive(Component, Reflect, Default, TiledClass, Debug)]
 #[reflect(Component)]
 #[tiled(name = "game::Enemy")]
 pub struct Enemy {
@@ -217,7 +217,7 @@ impl FromTiledProperty for EnemyType {
 }
 
 /// Collectible component - for items that can be picked up
-#[derive(Component, Reflect, TiledClass, Debug)]
+#[derive(Component, Reflect, Default, TiledClass, Debug)]
 #[reflect(Component)]
 #[tiled(name = "game::Collectible")]
 pub struct Collectible {
@@ -238,7 +238,7 @@ pub struct Collectible {
 }
 
 /// Spawn point component - marks locations where entities spawn
-#[derive(Component, Reflect, TiledClass, Debug)]
+#[derive(Component, Reflect, Default, TiledClass, Debug)]
 #[reflect(Component)]
 #[tiled(name = "game::SpawnPoint")]
 pub struct SpawnPoint {
