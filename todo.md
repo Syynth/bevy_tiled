@@ -1,0 +1,1 @@
+- parse tiled project custom properties as a resource using the deserialized stuff

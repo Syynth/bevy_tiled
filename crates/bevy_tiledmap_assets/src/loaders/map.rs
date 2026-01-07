@@ -90,18 +90,9 @@ impl AssetLoader for TiledMapAssetLoader {
             // when objects are parsed. No need to track them separately.
             let templates = HashMap::default();
 
-            // 5. Load image layer dependencies
+            // 5. Load image layer dependencies (recursively searches group layers)
             let mut images = HashMap::default();
-            for layer in map.layers() {
-                if let Some(image_layer) = layer.as_image_layer()
-                    && let Some(ref image) = image_layer.image
-                {
-                    let image_path =
-                        resolve_relative_path(load_context, &image.source.to_string_lossy())?;
-                    let handle: Handle<Image> = load_context.load(image_path);
-                    images.insert(layer.id(), handle);
-                }
-            }
+            collect_image_layers(&map, load_context, &mut images)?;
 
             // 6. Calculate processed data
             let (tilemap_size, largest_tile_size, rect) = calculate_map_bounds(&map, &tilesets);
@@ -115,29 +106,13 @@ impl AssetLoader for TiledMapAssetLoader {
             let mut properties = map.properties.clone();
             normalize_property_paths(&mut properties, load_context);
 
-            // 9. Extract and normalize layer properties
+            // 9. Extract and normalize layer properties (recursively searches group layers)
             let mut layer_properties = HashMap::default();
-            for layer in map.layers() {
-                if !layer.properties.is_empty() {
-                    let mut props = layer.properties.clone();
-                    normalize_property_paths(&mut props, load_context);
-                    layer_properties.insert(layer.id(), props);
-                }
-            }
+            collect_layer_properties(&map, load_context, &mut layer_properties);
 
-            // 10. Extract and normalize object properties from all object layers
+            // 10. Extract and normalize object properties from all object layers (recursively)
             let mut object_properties = HashMap::default();
-            for layer in map.layers() {
-                if let Some(object_layer) = layer.as_object_layer() {
-                    for object in object_layer.objects() {
-                        if !object.properties.is_empty() {
-                            let mut props = object.properties.clone();
-                            normalize_property_paths(&mut props, load_context);
-                            object_properties.insert(object.id(), props);
-                        }
-                    }
-                }
-            }
+            collect_object_properties(&map, load_context, &mut object_properties);
 
             // 11. Build asset
             Ok(TiledMapAsset {
@@ -299,6 +274,97 @@ fn calculate_infinite_map_data(map: &tiled::Map) -> (Vec2, (i32, i32), (i32, i32
         // Finite map: no offset needed
         (Vec2::ZERO, (0, 0), (0, 0))
     }
+}
+
+/// Recursively collect image layers and load their images.
+///
+/// Tiled maps can have image layers nested inside group layers. This function
+/// recursively traverses all layers to find and load all image dependencies.
+fn collect_image_layers(
+    map: &tiled::Map,
+    load_context: &mut LoadContext,
+    images: &mut HashMap<u32, Handle<Image>>,
+) -> Result<(), MapLoaderError> {
+    fn collect_from_layers<'a>(
+        layers: impl Iterator<Item = tiled::Layer<'a>>,
+        load_context: &mut LoadContext,
+        images: &mut HashMap<u32, Handle<Image>>,
+    ) -> Result<(), MapLoaderError> {
+        for layer in layers {
+            if let Some(image_layer) = layer.as_image_layer() {
+                if let Some(ref image) = image_layer.image {
+                    let image_path =
+                        resolve_relative_path(load_context, &image.source.to_string_lossy())?;
+                    let handle: Handle<Image> = load_context.load(image_path);
+                    images.insert(layer.id(), handle);
+                }
+            } else if let Some(group) = layer.as_group_layer() {
+                // Recursively process group layer children
+                collect_from_layers(group.layers(), load_context, images)?;
+            }
+        }
+        Ok(())
+    }
+
+    collect_from_layers(map.layers(), load_context, images)
+}
+
+/// Recursively collect layer properties from all layers including nested groups.
+fn collect_layer_properties(
+    map: &tiled::Map,
+    load_context: &LoadContext,
+    layer_properties: &mut HashMap<u32, tiled::Properties>,
+) {
+    fn collect_from_layers<'a>(
+        layers: impl Iterator<Item = tiled::Layer<'a>>,
+        load_context: &LoadContext,
+        layer_properties: &mut HashMap<u32, tiled::Properties>,
+    ) {
+        for layer in layers {
+            if !layer.properties.is_empty() {
+                let mut props = layer.properties.clone();
+                normalize_property_paths(&mut props, load_context);
+                layer_properties.insert(layer.id(), props);
+            }
+
+            // Recursively process group layer children
+            if let Some(group) = layer.as_group_layer() {
+                collect_from_layers(group.layers(), load_context, layer_properties);
+            }
+        }
+    }
+
+    collect_from_layers(map.layers(), load_context, layer_properties)
+}
+
+/// Recursively collect object properties from all object layers including nested groups.
+fn collect_object_properties(
+    map: &tiled::Map,
+    load_context: &LoadContext,
+    object_properties: &mut HashMap<u32, tiled::Properties>,
+) {
+    fn collect_from_layers<'a>(
+        layers: impl Iterator<Item = tiled::Layer<'a>>,
+        load_context: &LoadContext,
+        object_properties: &mut HashMap<u32, tiled::Properties>,
+    ) {
+        for layer in layers {
+            if let Some(object_layer) = layer.as_object_layer() {
+                for object in object_layer.objects() {
+                    if !object.properties.is_empty() {
+                        let mut props = object.properties.clone();
+                        normalize_property_paths(&mut props, load_context);
+                        object_properties.insert(object.id(), props);
+                    }
+                }
+            } else if let Some(group) = layer.as_group_layer() {
+                // Recursively process group layer children
+                collect_from_layers(group.layers(), load_context, object_properties);
+            }
+        }
+    }
+
+    collect_from_layers(map.layers(), load_context, object_properties)
 }
 
 /// Resolve relative path from Tiled file to Bevy asset path

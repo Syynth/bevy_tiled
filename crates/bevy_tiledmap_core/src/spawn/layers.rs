@@ -112,18 +112,18 @@ pub fn spawn_layer(
         }
 
         LayerType::Image(_) => {
-            // Build image data and attach to layer
+            // Build image data and attach to layer, only trigger event if data exists
             if let Some(image_data) = build_image_layer_data(layer, context) {
                 commands.entity(layer_entity).insert(image_data);
-            }
 
-            // Trigger ImageLayerSpawned event
-            commands.trigger(ImageLayerSpawned {
-                entity: layer_entity,
-                map_entity,
-                layer_id: layer.id(),
-                properties: layer.properties.clone(),
-            });
+                // Trigger ImageLayerSpawned event only when image data is present
+                commands.trigger(ImageLayerSpawned {
+                    entity: layer_entity,
+                    map_entity,
+                    layer_id: layer.id(),
+                    properties: layer.properties.clone(),
+                });
+            }
         }
 
         LayerType::Group(group) => {
