@@ -40,4 +40,11 @@ pub struct ImageLayerData {
 
     /// Image height (if specified in Tiled, otherwise use image dimensions)
     pub height: Option<f32>,
+
+    /// Tint color for the image layer (from Tiled's tintcolor attribute)
+    pub tint_color: Option<Color>,
+
+    /// Map pixel height for coordinate conversion in Layer 3 rendering.
+    /// Used to position images correctly in Bevy's Y-up coordinate system.
+    pub map_pixel_height: f32,
 }

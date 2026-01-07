@@ -4,6 +4,7 @@ use std::path::PathBuf;
 
 use bevy::prelude::*;
 
+use crate::debug::{DebugMapGeometry, draw_map_geometry_debug};
 use crate::properties::{TiledClassRegistry, export_all_types_with_reflection};
 use crate::systems::{check_world_spawn_complete, process_loaded_maps, process_loaded_worlds};
 
@@ -136,6 +137,15 @@ impl Plugin for TiledmapCorePlugin {
         app.add_systems(
             PreUpdate,
             (process_loaded_worlds, process_loaded_maps, check_world_spawn_complete).chain(),
+        );
+
+        // Enable debug visualization by default (remove this line to disable)
+        app.init_resource::<DebugMapGeometry>();
+
+        // Add debug visualization system (only runs when DebugMapGeometry resource is present)
+        app.add_systems(
+            PostUpdate,
+            draw_map_geometry_debug.run_if(resource_exists::<DebugMapGeometry>),
         );
     }
 }

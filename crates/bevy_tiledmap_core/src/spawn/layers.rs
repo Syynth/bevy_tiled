@@ -62,7 +62,7 @@ pub fn spawn_layer(
     // Calculate layer transform (offset, parallax will be added in Phase 3)
     let transform = Transform::from_xyz(
         layer.offset_x,
-        -layer.offset_y, // Invert Y
+        -layer.offset_y, // Invert Y for Tiled's Y-down to Bevy's Y-up
         z,
     );
 
@@ -128,6 +128,7 @@ pub fn spawn_layer(
 
         LayerType::Group(group) => {
             // Recursively spawn child layers, skipping hidden ones
+            // Children use is_top_level=false since their parent is already in positive Y space
             let mut child_layer_entities = Vec::new();
             for child_layer in group.layers() {
                 if !child_layer.visible {

@@ -1,19 +1,6 @@
 [
   {
     "id": 1,
-    "name": "Player",
-    "type": "class",
-    "useAs": [
-      "property"
-    ],
-    "color": "#000000",
-    "drawFill": true,
-    "members": [
-
-    ]
-  },
-  {
-    "id": 2,
     "name": "avian::PhysicsSettings",
     "type": "class",
     "useAs": [
@@ -78,6 +65,19 @@
         "type": "bool",
         "value": false
       }
+    ]
+  },
+  {
+    "id": 2,
+    "name": "Player",
+    "type": "class",
+    "useAs": [
+      "property"
+    ],
+    "color": "#000000",
+    "drawFill": true,
+    "members": [
+
     ]
   },
   {

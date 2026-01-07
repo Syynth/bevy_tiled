@@ -84,27 +84,26 @@ pub fn spawn_objects_layer(
         // Tiled uses corner origin with Y increasing downward
         // Bevy uses center origin with Y increasing upward (positive Y space)
         //
-        // We convert from Tiled coordinates to Bevy's positive Y coordinate system:
-        // - Map origin (0,0) is at bottom-left in Bevy world space
-        // - Y increases upward
-        // - For regular objects: Tiled anchor is TOP-left
-        // - For tile objects: Tiled anchor is BOTTOM-left
+        // Objects are children of layer entities, which handle the map_height offset.
+        // Object transforms are relative to their parent layer:
+        // - X: object center in Tiled coords (object.x + width/2)
+        // - Y: negated Tiled Y center (layer already accounts for map_height)
+        // - For regular objects: Tiled anchor is TOP-left, extends DOWN
+        // - For tile objects: Tiled anchor is BOTTOM-left, extends UP
         let (obj_width, obj_height) = match &object.shape {
             ObjectShape::Rect { width, height } => (*width, *height),
             _ => (0.0, 0.0),
         };
 
-        // Map dimensions for Y-flip calculation
-        let map_pixel_height =
-            context.map_asset.map.height as f32 * context.map_asset.map.tile_height as f32;
+        // Calculate center position in Bevy coordinates (using MapGeometry pattern)
+        // Y-flip: Tiled Y=0 (top) → Bevy Y=map_height (top)
+        let map_pixel_height = context.map_asset.map.height as f32 * context.map_asset.map.tile_height as f32;
 
-        // Calculate center position in Bevy coordinates (positive Y space)
         let (center_x, center_y) = if object.tile_data().is_some() {
             // Tile objects: anchor is at BOTTOM-left, tile extends UP
             // Center X = x + width/2
-            // Tiled Y is from top, Bevy Y is from bottom
-            // Object center in Tiled coords = y - height/2 (since tile extends up)
-            // Bevy Y = map_height - tiled_y_center
+            // Tiled center Y = y - height/2 (since tile extends up from anchor)
+            // Bevy Y = map_height - tiled_y
             (
                 object.x + obj_width / 2.0,
                 map_pixel_height - (object.y - obj_height / 2.0),
@@ -112,8 +111,8 @@ pub fn spawn_objects_layer(
         } else {
             // Regular objects: anchor is at TOP-left, object extends DOWN
             // Center X = x + width/2
-            // Object center in Tiled coords = y + height/2
-            // Bevy Y = map_height - tiled_y_center
+            // Tiled center Y = y + height/2
+            // Bevy Y = map_height - tiled_y
             (
                 object.x + obj_width / 2.0,
                 map_pixel_height - (object.y + obj_height / 2.0),

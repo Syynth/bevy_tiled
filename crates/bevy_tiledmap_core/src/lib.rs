@@ -49,6 +49,7 @@
 //! ```
 
 pub mod components;
+pub mod debug;
 pub mod events;
 pub mod plugin;
 pub mod properties;
@@ -62,6 +63,7 @@ pub mod prelude {
         LayerId, MapGeometry, ObjectId, TiledLayer, TiledLayerMapOf, TiledMap, TiledObject,
         TiledObjectMapOf, TiledSceneRoot, TiledWorld,
     };
+    pub use crate::debug::DebugMapGeometry;
     pub use crate::events::{
         GroupLayerSpawned, ImageLayerSpawned, MapSpawned, ObjectLayerSpawned, ObjectSpawned,
         TileLayerSpawned, WorldSpawned,

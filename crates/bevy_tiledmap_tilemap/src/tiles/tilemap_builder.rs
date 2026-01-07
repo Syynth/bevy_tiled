@@ -120,7 +120,15 @@ impl TilemapBuilder {
         // Check if this is an image collection or atlas tileset
         if tileset.atlas_image.is_some() {
             // Use bevy_ecs_tilemap for atlas tilesets
-            Self::create_atlas_tilemap(commands, layer_entity, tiles, tileset, tileset_handle, width, height);
+            Self::create_atlas_tilemap(
+                commands,
+                layer_entity,
+                tiles,
+                tileset,
+                tileset_handle,
+                width,
+                height,
+            );
         } else {
             // Use simple sprites for image collection tilesets
             Self::create_image_collection_tilemap(commands, layer_entity, tiles, tileset, height);
@@ -145,12 +153,12 @@ impl TilemapBuilder {
                 continue;
             };
 
-            // Calculate world position for this tile
-            // Positive Y coordinate system (origin at bottom-left, Y increases upward)
+            // Calculate local position for this tile relative to the layer
             // Flip Y: Tiled y=0 is top, Bevy y=0 is bottom
+            // Use positive Y coordinates to match MapGeometry bounds
             let flipped_y = height - 1 - y;
-            let world_x = (x as f32 * tile_size.x as f32) + (tile_size.x as f32 / 2.0);
-            let world_y = (flipped_y as f32 * tile_size.y as f32) + (tile_size.y as f32 / 2.0);
+            let world_x = (x as f32 + 0.5) * tile_size.x as f32;
+            let world_y = (flipped_y as f32 + 0.5) * tile_size.y as f32;
 
             // Spawn a sprite for this tile
             let mut sprite_bundle = Sprite {
@@ -169,10 +177,7 @@ impl TilemapBuilder {
             }
 
             commands.entity(layer_entity).with_children(|parent| {
-                parent.spawn((
-                    sprite_bundle,
-                    transform,
-                ));
+                parent.spawn((sprite_bundle, transform));
             });
         }
 
@@ -197,7 +202,10 @@ impl TilemapBuilder {
             return;
         };
 
-        let map_size = TilemapSize { x: width, y: height };
+        let map_size = TilemapSize {
+            x: width,
+            y: height,
+        };
 
         let tile_size = TilemapTileSize {
             x: tileset.tile_size.x as f32,
@@ -257,8 +265,9 @@ impl TilemapBuilder {
         commands.entity(tilemap_entity).add_children(&tile_entities);
 
         // Now insert the TilemapBundle with populated storage
-        // Offset by half a tile so that tile (0,0) is centered at (tile_width/2, tile_height/2)
-        // This aligns with our positive Y coordinate system where origin is at bottom-left
+        // Position tilemap so tiles render with positive Y matching MapGeometry bounds
+        // bevy_ecs_tilemap places TilePos y=0 at tilemap origin, so we offset by half tile
+        let tilemap_y = tile_size.y / 2.0;
         let texture = TilemapTexture::Single(atlas_image.clone());
         commands.entity(tilemap_entity).insert((
             TilemapBundle {
@@ -268,13 +277,13 @@ impl TilemapBuilder {
                 texture,
                 tile_size,
                 map_type: TilemapType::Square,
-                transform: Transform::from_xyz(tile_size.x / 2.0, tile_size.y / 2.0, 0.0),
+                transform: Transform::from_xyz(tile_size.x / 2.0, tilemap_y, 0.0),
                 ..default()
             },
             TilesetReference(tileset_handle),
         ));
 
-        info!("Created tilemap for tileset with {} tiles", tile_count);
+        // info!("Created tilemap for tileset with {} tiles, tilemap_y={}, layer_pixel_height={}", tile_count, tilemap_y, layer_pixel_height);
     }
 }
 

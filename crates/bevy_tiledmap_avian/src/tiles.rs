@@ -109,6 +109,7 @@ fn generate_merged_compound_collider(
 
     // We need to know tile size for positioning. Extract it from the first tileset we encounter
     let mut tile_size = Vec2::new(16.0, 16.0); // Default fallback
+    let map_height = tile_data.height;
 
     for (x, y, tile_instance) in tile_data.iter_tiles() {
         // Get the tileset for this tile
@@ -137,13 +138,18 @@ fn generate_merged_compound_collider(
             // Custom shape - add individual shapes directly to avoid nested compounds
             let tile_shapes = shapes::get_tile_collision_shapes(tileset, tile_instance.tile_id);
             if !tile_shapes.is_empty() {
-                // Get tile center position in world coords
-                let tile_world_pos = tile_data.grid_to_world(x, y, tile_size);
+                // Calculate tile center position to match tilemap rendering
+                // Use positive Y with Y-flip to match MapGeometry bounds
+                let flipped_y = map_height - 1 - y;
+                let tile_local_pos = Vec2::new(
+                    (x as f32 + 0.5) * tile_size.x,
+                    (flipped_y as f32 + 0.5) * tile_size.y,
+                );
 
                 // Add each shape with its offset relative to tile center
                 for (shape_offset, rotation, collider) in tile_shapes {
-                    let world_pos = tile_world_pos + shape_offset;
-                    custom_shapes.push((world_pos, rotation, collider));
+                    let local_pos = tile_local_pos + shape_offset;
+                    custom_shapes.push((local_pos, rotation, collider));
                 }
             }
         }
@@ -154,7 +160,7 @@ fn generate_merged_compound_collider(
     let total_tiles_before = rectangular_tiles.values().map(Vec::len).sum::<usize>();
 
     for (_key, positions) in rectangular_tiles {
-        let strips = merge_rectangular_tiles_into_strips(positions, tile_size, tile_data.height);
+        let strips = merge_rectangular_tiles_into_strips(positions, tile_size, map_height);
         for (center, size) in strips {
             merged_colliders.push((center, 0.0, Collider::rectangle(size.x, size.y)));
         }
@@ -214,11 +220,12 @@ struct TileCollisionKey {
 ///
 /// * `positions` - Grid positions of tiles to merge
 /// * `tile_size` - Size of each tile in world units
-/// * `map_height` - Map height in tiles (for positive Y coordinate conversion)
+/// * `map_height` - Height of the map in tiles (for Y-flip)
 ///
 /// # Returns
 ///
-/// Vector of (`center_position`, size) for each merged rectangle
+/// Vector of (`center_position`, size) for each merged rectangle.
+/// Uses positive Y with Y-flip to match MapGeometry bounds.
 fn merge_rectangular_tiles_into_strips(
     positions: Vec<(u32, u32)>,
     tile_size: Vec2,
@@ -262,14 +269,13 @@ fn merge_rectangular_tiles_into_strips(
         }
 
         // Calculate center position and size
-        // Use positive Y coordinate system (origin at bottom-left, Y increases upward)
+        // Use positive Y with Y-flip to match MapGeometry bounds
         let strip_width = width as f32 * tile_size.x;
         let strip_height = height as f32 * tile_size.y;
         let center_x = (start_x as f32 + width as f32 / 2.0) * tile_size.x;
-        // Flip Y: Tiled y=0 is top, Bevy y=0 is bottom
-        // Strip center in Tiled coords: start_y + height/2
-        // Bevy Y = map_height - tiled_center
-        let center_y = (map_height as f32 - start_y as f32 - height as f32 / 2.0) * tile_size.y;
+        // Y-flip: start_y is top of strip in Tiled coords, convert to Bevy positive Y
+        let flipped_y = map_height as f32 - start_y as f32 - height as f32 / 2.0;
+        let center_y = flipped_y * tile_size.y;
 
         strips.push((
             Vec2::new(center_x, center_y),
@@ -288,13 +294,13 @@ mod tests {
     fn test_merge_single_tile() {
         let positions = vec![(0, 0)];
         let tile_size = Vec2::new(16.0, 16.0);
-        let map_height = 1; // 1-tile tall map
+        let map_height = 10; // 10 tiles tall
         let strips = merge_rectangular_tiles_into_strips(positions, tile_size, map_height);
 
         assert_eq!(strips.len(), 1);
-        // Positive Y coordinate system (origin at bottom-left)
-        // Tile at (0,0) with map_height=1: center_y = (1 - 0 - 0.5) * 16 = 8
-        assert_eq!(strips[0].0, Vec2::new(8.0, 8.0)); // Center
+        // Positive Y with Y-flip to match MapGeometry
+        // Tile at (0,0) in 10-tile map: flipped_y = 10 - 0 - 0.5 = 9.5, center_y = 9.5 * 16 = 152
+        assert_eq!(strips[0].0, Vec2::new(8.0, 152.0)); // Center
         assert_eq!(strips[0].1, Vec2::new(16.0, 16.0)); // Size
     }
 
@@ -302,13 +308,13 @@ mod tests {
     fn test_merge_horizontal_strip() {
         let positions = vec![(0, 0), (1, 0), (2, 0)];
         let tile_size = Vec2::new(16.0, 16.0);
-        let map_height = 1; // 1-tile tall map
+        let map_height = 10;
         let strips = merge_rectangular_tiles_into_strips(positions, tile_size, map_height);
 
         assert_eq!(strips.len(), 1);
-        // Positive Y coordinate system
-        // 3-tile strip at y=0 with map_height=1: center_y = (1 - 0 - 0.5) * 16 = 8
-        assert_eq!(strips[0].0, Vec2::new(24.0, 8.0)); // Center of 3-wide strip
+        // Positive Y with Y-flip
+        // 3-tile strip at y=0: flipped_y = 10 - 0 - 0.5 = 9.5, center_y = 152
+        assert_eq!(strips[0].0, Vec2::new(24.0, 152.0)); // Center of 3-wide strip
         assert_eq!(strips[0].1, Vec2::new(48.0, 16.0)); // 3 tiles wide
     }
 
@@ -317,13 +323,13 @@ mod tests {
         // 2x2 square
         let positions = vec![(0, 0), (1, 0), (0, 1), (1, 1)];
         let tile_size = Vec2::new(16.0, 16.0);
-        let map_height = 2; // 2-tile tall map
+        let map_height = 10;
         let strips = merge_rectangular_tiles_into_strips(positions, tile_size, map_height);
 
         assert_eq!(strips.len(), 1);
-        // Positive Y coordinate system
-        // 2x2 block starting at (0,0) with map_height=2: center_y = (2 - 0 - 1) * 16 = 16
-        assert_eq!(strips[0].0, Vec2::new(16.0, 16.0)); // Center of 2x2
+        // Positive Y with Y-flip
+        // 2x2 block starting at (0,0): flipped_y = 10 - 0 - 1 = 9, center_y = 9 * 16 = 144
+        assert_eq!(strips[0].0, Vec2::new(16.0, 144.0)); // Center of 2x2
         assert_eq!(strips[0].1, Vec2::new(32.0, 32.0)); // 2x2 tiles
     }
 
@@ -335,7 +341,7 @@ mod tests {
             (0, 1), (0, 2), // Vertical part
         ];
         let tile_size = Vec2::new(16.0, 16.0);
-        let map_height = 3; // 3-tile tall map
+        let map_height = 10;
         let strips = merge_rectangular_tiles_into_strips(positions, tile_size, map_height);
 
         // Should merge into 2 rectangles (greedy algorithm)
