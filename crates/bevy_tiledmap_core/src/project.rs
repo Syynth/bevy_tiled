@@ -185,6 +185,9 @@ pub struct TiledProjectProperties {
 
     /// Enums indexed by name.
     enums: HashMap<String, EnumDefinition>,
+
+    /// Project-level property values indexed by name.
+    properties: HashMap<String, serde_json::Value>,
 }
 
 impl TiledProjectProperties {
@@ -197,6 +200,7 @@ impl TiledProjectProperties {
     pub fn from_asset(asset: &TiledProjectAsset) -> Self {
         let mut classes = HashMap::new();
         let mut enums = HashMap::new();
+        let mut properties = HashMap::new();
 
         for prop_type in &asset.property_types {
             match prop_type {
@@ -209,7 +213,16 @@ impl TiledProjectProperties {
             }
         }
 
-        Self { classes, enums }
+        // Extract project-level property values
+        for prop in &asset.properties {
+            if let Some(name) = prop.get("name").and_then(|v| v.as_str()) {
+                if let Some(value) = prop.get("value") {
+                    properties.insert(name.to_string(), value.clone());
+                }
+            }
+        }
+
+        Self { classes, enums, properties }
     }
 
     /// Get a class definition by name.
@@ -276,6 +289,55 @@ impl TiledProjectProperties {
     /// Check if an enum exists.
     pub fn has_enum(&self, name: &str) -> bool {
         self.enums.contains_key(name)
+    }
+
+    /// Get a project-level property value by name.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// if let Some(value) = props.get_property("starting_spawn") {
+    ///     println!("Starting spawn: {:?}", value);
+    /// }
+    /// ```
+    pub fn get_property(&self, name: &str) -> Option<&serde_json::Value> {
+        self.properties.get(name)
+    }
+
+    /// Deserialize a project-level property value into type `T`.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// #[derive(Deserialize)]
+    /// struct SpawnTarget {
+    ///     target_map: String,
+    ///     target_tile: IVec2,
+    /// }
+    ///
+    /// fn get_spawn(props: Res<TiledProjectProperties>) {
+    ///     match props.get_property_as::<SpawnTarget>("starting_spawn") {
+    ///         Ok(spawn) => println!("Starting map: {}", spawn.target_map),
+    ///         Err(e) => warn!("No starting spawn: {}", e),
+    ///     }
+    /// }
+    /// ```
+    pub fn get_property_as<T: DeserializeOwned>(
+        &self,
+        name: &str,
+    ) -> Result<T, ProjectDeserializeError> {
+        let value = self
+            .properties
+            .get(name)
+            .ok_or_else(|| ProjectDeserializeError::ClassNotFound(format!("property '{}'", name)))?;
+
+        serde_json::from_value(value.clone())
+            .map_err(|e| ProjectDeserializeError::DeserializeFailed(e.to_string()))
+    }
+
+    /// Check if a project-level property exists.
+    pub fn has_property(&self, name: &str) -> bool {
+        self.properties.contains_key(name)
     }
 
     /// Deserialize a class definition's default values into type `T`.
