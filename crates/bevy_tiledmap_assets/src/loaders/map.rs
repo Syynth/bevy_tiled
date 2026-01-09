@@ -167,22 +167,37 @@ fn calculate_map_bounds(
         let mut max_x = i32::MIN;
         let mut max_y = i32::MIN;
 
-        for layer in map.layers() {
-            if let Some(tile_layer) = layer.as_tile_layer() {
-                match tile_layer {
-                    tiled::TileLayer::Finite(_) => {
-                        // Shouldn't happen in infinite maps, but handle gracefully
-                    }
-                    tiled::TileLayer::Infinite(infinite_layer) => {
+        // Recursively collect chunk bounds from all layers (including nested group layers)
+        fn collect_bounds<'a>(
+            layers: impl Iterator<Item = tiled::Layer<'a>>,
+            min_x: &mut i32,
+            min_y: &mut i32,
+            max_x: &mut i32,
+            max_y: &mut i32,
+        ) {
+            for layer in layers {
+                match layer.layer_type() {
+                    tiled::LayerType::Tiles(tiled::TileLayer::Infinite(infinite_layer)) => {
                         for ((chunk_x, chunk_y), _chunk) in infinite_layer.chunks() {
-                            min_x = min_x.min(chunk_x);
-                            min_y = min_y.min(chunk_y);
-                            max_x = max_x.max(chunk_x);
-                            max_y = max_y.max(chunk_y);
+                            *min_x = (*min_x).min(chunk_x);
+                            *min_y = (*min_y).min(chunk_y);
+                            *max_x = (*max_x).max(chunk_x);
+                            *max_y = (*max_y).max(chunk_y);
                         }
                     }
+                    tiled::LayerType::Group(group) => {
+                        collect_bounds(group.layers(), min_x, min_y, max_x, max_y);
+                    }
+                    _ => {}
                 }
             }
+        }
+
+        collect_bounds(map.layers(), &mut min_x, &mut min_y, &mut max_x, &mut max_y);
+
+        // Handle case where no chunks were found
+        if min_x == i32::MAX {
+            return (UVec2::ZERO, largest_tile_size, Rect::new(0.0, 0.0, 0.0, 0.0));
         }
 
         // Chunk dimensions are constants in the tiled crate
@@ -190,8 +205,8 @@ fn calculate_map_bounds(
         let chunk_height = tiled::ChunkData::HEIGHT;
 
         // Calculate size in chunks, then convert to tiles
-        let chunks_wide = if max_x >= min_x { max_x - min_x + 1 } else { 0 };
-        let chunks_tall = if max_y >= min_y { max_y - min_y + 1 } else { 0 };
+        let chunks_wide = max_x - min_x + 1;
+        let chunks_tall = max_y - min_y + 1;
 
         let tilemap_size = UVec2::new(
             (chunks_wide * chunk_width as i32) as u32,

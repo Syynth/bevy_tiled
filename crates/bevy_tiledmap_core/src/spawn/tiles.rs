@@ -1,5 +1,7 @@
 //! Tile layer spawning.
 
+use std::panic;
+
 use bevy::prelude::*;
 use tiled::{LayerType, TileLayer};
 
@@ -44,14 +46,36 @@ fn build_finite_tile_layer_data(
     let width = tile_layer.width();
     let height = tile_layer.height();
 
+    // Safety check: ensure dimensions are valid
+    if width == 0 || height == 0 {
+        return None;
+    }
+
     let mut tile_data = TileLayerData::empty(width, height);
 
     // Iterate tiles and pre-process each one
     for y in 0..height {
         for x in 0..width {
-            if let Some(tile) = tile_layer.get_tile(x as i32, y as i32)
-                && let Some(tile_instance) = create_tile_instance(&tile, x, y, context)
-            {
+            // Use catch_unwind to handle potential panics from the tiled crate
+            // when layer dimensions don't match internal data array size
+            let tile_result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
+                tile_layer.get_tile(x as i32, y as i32)
+            }));
+
+            let tile = match tile_result {
+                Ok(Some(t)) => t,
+                Ok(None) => continue,
+                Err(_) => {
+                    // Panic occurred - layer data is likely malformed, skip remaining tiles
+                    warn!(
+                        "Tile layer has malformed data at ({}, {}), skipping remaining tiles",
+                        x, y
+                    );
+                    return Some(tile_data);
+                }
+            };
+
+            if let Some(tile_instance) = create_tile_instance(&tile, x, y, context) {
                 tile_data.set(x, y, Some(tile_instance));
             }
         }
