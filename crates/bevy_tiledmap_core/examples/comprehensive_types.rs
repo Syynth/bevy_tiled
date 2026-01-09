@@ -17,6 +17,7 @@ fn main() {
         .add_plugins(TiledmapCorePlugin::new(TiledmapCoreConfig {
             // Export to current directory
             export_types_path: Some("tiled_types.json".into()),
+            ..default()
         }));
 
     // Run the app to trigger the Startup system that exports types

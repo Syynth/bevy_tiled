@@ -25,8 +25,8 @@
 //! ```
 
 use bevy::prelude::*;
-use serde::de::DeserializeOwned;
 use serde::Deserialize;
+use serde::de::DeserializeOwned;
 use std::collections::HashMap;
 use thiserror::Error;
 
@@ -101,7 +101,7 @@ pub struct ClassDefinition {
     /// Unique identifier for this class.
     pub id: u32,
 
-    /// Name of the class (e.g., "avian::PhysicsSettings").
+    /// Name of the class (e.g., `"avian::PhysicsSettings"`).
     pub name: String,
 
     /// Member fields of the class.
@@ -135,7 +135,7 @@ pub struct ClassMember {
     /// Default value for this member.
     pub value: serde_json::Value,
 
-    /// Optional property type name for nested types (e.g., "avian::BodyType").
+    /// Optional property type name for nested types (e.g., `"avian::BodyType"`).
     #[serde(default)]
     pub property_type: Option<String>,
 }
@@ -147,7 +147,7 @@ pub struct EnumDefinition {
     /// Unique identifier for this enum.
     pub id: u32,
 
-    /// Name of the enum (e.g., "avian::BodyType").
+    /// Name of the enum (e.g., `"avian::BodyType"`).
     pub name: String,
 
     /// Enum variant names.
@@ -215,14 +215,18 @@ impl TiledProjectProperties {
 
         // Extract project-level property values
         for prop in &asset.properties {
-            if let Some(name) = prop.get("name").and_then(|v| v.as_str()) {
-                if let Some(value) = prop.get("value") {
-                    properties.insert(name.to_string(), value.clone());
-                }
+            if let Some(name) = prop.get("name").and_then(|v| v.as_str())
+                && let Some(value) = prop.get("value")
+            {
+                properties.insert(name.to_string(), value.clone());
             }
         }
 
-        Self { classes, enums, properties }
+        Self {
+            classes,
+            enums,
+            properties,
+        }
     }
 
     /// Get a class definition by name.
@@ -262,7 +266,11 @@ impl TiledProjectProperties {
     ///     println!("Default friction: {}", friction);
     /// }
     /// ```
-    pub fn get_member_value(&self, class_name: &str, member_name: &str) -> Option<&serde_json::Value> {
+    pub fn get_member_value(
+        &self,
+        class_name: &str,
+        member_name: &str,
+    ) -> Option<&serde_json::Value> {
         self.classes
             .get(class_name)?
             .members
@@ -326,10 +334,9 @@ impl TiledProjectProperties {
         &self,
         name: &str,
     ) -> Result<T, ProjectDeserializeError> {
-        let value = self
-            .properties
-            .get(name)
-            .ok_or_else(|| ProjectDeserializeError::ClassNotFound(format!("property '{}'", name)))?;
+        let value = self.properties.get(name).ok_or_else(|| {
+            ProjectDeserializeError::ClassNotFound(format!("property '{}'", name))
+        })?;
 
         serde_json::from_value(value.clone())
             .map_err(|e| ProjectDeserializeError::DeserializeFailed(e.to_string()))

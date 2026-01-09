@@ -16,6 +16,7 @@ fn main() {
                 .with_core(TiledmapCoreConfig {
                     // Export type definitions for Tiled editor autocomplete
                     export_types_path: Some("assets/tiled_types.json".into()),
+                    ..default()
                 })
                 // Layer 3: Tilemap rendering configuration
                 .with_tilemap(TilemapRenderConfig {

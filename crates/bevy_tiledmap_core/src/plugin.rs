@@ -144,7 +144,9 @@ impl TiledmapCorePlugin {
 impl Plugin for TiledmapCorePlugin {
     fn build(&self, app: &mut App) {
         // Register the JSON asset plugin for .tiled-project files
-        app.add_plugins(JsonAssetPlugin::<TiledProjectAsset>::new(&["tiled-project"]));
+        app.add_plugins(JsonAssetPlugin::<TiledProjectAsset>::new(&[
+            "tiled-project",
+        ]));
 
         // Initialize TiledProjectProperties resource (empty until project loads)
         app.init_resource::<TiledProjectProperties>();
@@ -168,11 +170,17 @@ impl Plugin for TiledmapCorePlugin {
         // Load project file if configured
         if let Some(project_path) = &self.config.project_path {
             let path = project_path.clone();
-            app.add_systems(Startup, move |mut commands: Commands, asset_server: Res<AssetServer>| {
-                let handle = asset_server.load::<TiledProjectAsset>(path.clone());
-                commands.insert_resource(PendingProjectLoad { handle });
-            });
-            app.add_systems(PreUpdate, process_project_load.run_if(resource_exists::<PendingProjectLoad>));
+            app.add_systems(
+                Startup,
+                move |mut commands: Commands, asset_server: Res<AssetServer>| {
+                    let handle = asset_server.load::<TiledProjectAsset>(path.clone());
+                    commands.insert_resource(PendingProjectLoad { handle });
+                },
+            );
+            app.add_systems(
+                PreUpdate,
+                process_project_load.run_if(resource_exists::<PendingProjectLoad>),
+            );
         }
 
         // Add reactive spawning systems (runs in PreUpdate before user systems)
@@ -215,7 +223,7 @@ fn export_types_at_startup(world: &mut World) {
     }
 }
 
-/// System that processes a loaded project asset and populates TiledProjectProperties.
+/// System that processes a loaded project asset and populates `TiledProjectProperties`.
 fn process_project_load(
     mut commands: Commands,
     pending: Res<PendingProjectLoad>,
