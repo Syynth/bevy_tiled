@@ -1,6 +1,6 @@
 # Architecture: Three Clean Layers (Workspace)
 
-The `bevy_tiled_topdown` **workspace** is designed with three distinct layers split across **5 separate crates**. This architecture enables clean code, testability, flexibility, and composability.
+The `bevy_tiledmap` **workspace** is designed with three distinct layers split across **5 separate crates**. This architecture enables clean code, testability, flexibility, and composability.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
