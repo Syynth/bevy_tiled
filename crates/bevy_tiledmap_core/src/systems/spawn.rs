@@ -39,17 +39,25 @@ pub fn process_loaded_maps(
     type_registry: Res<AppTypeRegistry>,
     z_config: Res<LayerZConfig>,
     mut commands: Commands,
-    mut map_query: Query<(Entity, &TiledMap), Or<(Without<crate::components::LayersInMap>, With<RespawnTiledMap>)>>,
+    mut map_query: Query<
+        (Entity, &TiledMap),
+        Or<(
+            Without<crate::components::LayersInMap>,
+            With<RespawnTiledMap>,
+        )>,
+    >,
 ) {
     for (map_entity, tiled_map) in map_query.iter_mut() {
         info!("Processing map entity {:?}", map_entity);
 
         // Check if all dependencies have finished loading
         let load_state = asset_server.get_recursive_dependency_load_state(&tiled_map.handle);
-        info!("Load state for map entity {:?}: {:?}", map_entity, load_state);
+        info!(
+            "Load state for map entity {:?}: {:?}",
+            map_entity, load_state
+        );
 
-        let Some(RecursiveDependencyLoadState::Loaded) = load_state
-        else {
+        let Some(RecursiveDependencyLoadState::Loaded) = load_state else {
             continue;
         };
 
@@ -77,18 +85,34 @@ pub fn process_loaded_maps(
         info!("Spawning map hierarchy for '{}'", map_name);
 
         // Add name to map entity if it doesn't have one
-        commands.entity(map_entity).insert(Name::new(format!("Map: {}", map_name)));
+        commands
+            .entity(map_entity)
+            .insert(Name::new(format!("Map: {}", map_name)));
 
         // Create spawn context with asset references
-        let context = SpawnContext::new(map_asset, &tileset_assets, &template_assets, &registry, &asset_server);
+        let context = SpawnContext::new(
+            map_asset,
+            &tileset_assets,
+            &template_assets,
+            &registry,
+            &asset_server,
+        );
 
         // Spawn the map hierarchy
-        spawn_map(&mut commands, map_entity, &context, &type_registry, &z_config);
+        spawn_map(
+            &mut commands,
+            map_entity,
+            &context,
+            &type_registry,
+            &z_config,
+        );
 
         info!("Map hierarchy spawned successfully");
 
         // Trigger MapSpawned event on the entity for observers
-        commands.entity(map_entity).trigger(|entity| MapSpawned { entity });
+        commands
+            .entity(map_entity)
+            .trigger(|entity| MapSpawned { entity });
 
         // Remove RespawnTiledMap marker if present
         commands.entity(map_entity).remove::<RespawnTiledMap>();
@@ -159,7 +183,9 @@ pub fn process_loaded_worlds(
             .unwrap_or_else(|| "World".to_string());
 
         // Add name to world entity
-        commands.entity(world_entity).insert(Name::new(world_name.clone()));
+        commands
+            .entity(world_entity)
+            .insert(Name::new(world_name.clone()));
 
         info!(
             "World '{}' found with {} maps, spawning map entities",
@@ -194,16 +220,9 @@ pub fn process_loaded_worlds(
             // So we position the map entity at the BOTTOM of where the map should be:
             // bevy_y = -(tiled_y + map_height)
             let map_height = world_map.height.unwrap_or(0) as f32;
-            let position = Vec3::new(
-                world_map.x as f32,
-                -(world_map.y as f32 + map_height),
-                0.0,
-            );
+            let position = Vec3::new(world_map.x as f32, -(world_map.y as f32 + map_height), 0.0);
 
-            info!(
-                "Spawning map '{}' at position {:?}",
-                map_name, position
-            );
+            info!("Spawning map '{}' at position {:?}", map_name, position);
 
             // Spawn the map entity as a child of the world
             let map_entity = commands
@@ -223,9 +242,10 @@ pub fn process_loaded_worlds(
 
         // Add MapsInWorld component to track the spawned maps
         // Also add PendingWorldSpawn to track when all maps finish processing
-        commands
-            .entity(world_entity)
-            .insert((MapsInWorld(map_entities.clone()), PendingWorldSpawn(map_entities)));
+        commands.entity(world_entity).insert((
+            MapsInWorld(map_entities.clone()),
+            PendingWorldSpawn(map_entities),
+        ));
 
         // Remove RespawnTiledWorld marker if present
         commands.entity(world_entity).remove::<RespawnTiledWorld>();
@@ -247,13 +267,19 @@ pub fn check_world_spawn_complete(
 ) {
     for (world_entity, pending) in &world_query {
         // Check if all maps have LayersInMap (indicating spawn complete)
-        let all_maps_ready = pending.0.iter().all(|&map_entity| {
-            map_query.get(map_entity).is_ok()
-        });
+        let all_maps_ready = pending
+            .0
+            .iter()
+            .all(|&map_entity| map_query.get(map_entity).is_ok());
 
         if all_maps_ready {
-            info!("All maps in world {:?} are ready, firing WorldSpawned", world_entity);
-            commands.entity(world_entity).trigger(|entity| WorldSpawned { entity });
+            info!(
+                "All maps in world {:?} are ready, firing WorldSpawned",
+                world_entity
+            );
+            commands
+                .entity(world_entity)
+                .trigger(|entity| WorldSpawned { entity });
             commands.entity(world_entity).remove::<PendingWorldSpawn>();
         }
     }

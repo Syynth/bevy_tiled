@@ -56,7 +56,6 @@ impl TiledmapAvianPlugin {
     }
 }
 
-
 impl Plugin for TiledmapAvianPlugin {
     fn build(&self, app: &mut App) {
         // Insert resources

@@ -29,10 +29,7 @@ fn main() {
 }
 
 fn setup_camera(mut commands: Commands) {
-    commands.spawn((
-        Camera2d,
-        Transform::from_xyz(0.0, 0.0, 1000.0),
-    ));
+    commands.spawn((Camera2d, Transform::from_xyz(0.0, 0.0, 1000.0)));
 }
 
 fn spawn_test_objects(mut commands: Commands) {

@@ -38,7 +38,15 @@ pub fn spawn_map(
         if !layer.visible {
             continue;
         }
-        let layer_entity = spawn_layer(commands, &layer, map_entity, context, type_registry, &mut z_counter, z_config);
+        let layer_entity = spawn_layer(
+            commands,
+            &layer,
+            map_entity,
+            context,
+            type_registry,
+            &mut z_counter,
+            z_config,
+        );
         layer_entities.push(layer_entity);
     }
 
@@ -54,9 +62,6 @@ pub fn spawn_map(
     // Add components and set up parent-child hierarchy
     commands
         .entity(map_entity)
-        .insert((
-            LayersInMap(layer_entities.clone()),
-            map_geometry,
-        ))
+        .insert((LayersInMap(layer_entities.clone()), map_geometry))
         .add_children(&layer_entities);
 }

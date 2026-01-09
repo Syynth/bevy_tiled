@@ -52,8 +52,8 @@
 
 use avian2d::prelude::*;
 use bevy::prelude::*;
-use bevy_tiledmap_avian::prelude::*;
 use bevy_tiledmap_assets::prelude::*;
+use bevy_tiledmap_avian::prelude::*;
 use bevy_tiledmap_core::prelude::*;
 
 // Define collision layers as constants using LayerMask
@@ -73,13 +73,11 @@ fn main() {
         .add_plugins(PhysicsDebugPlugin)
         .add_plugins(TiledmapAssetsPlugin)
         .add_plugins(TiledmapCorePlugin::default())
-        .add_plugins(TiledmapAvianPlugin::new(
-            PhysicsConfig {
-                // Provide custom collision layer parsing
-                collision_layers_fn: parse_collision_layers,
-                ..default()
-            }
-        ))
+        .add_plugins(TiledmapAvianPlugin::new(PhysicsConfig {
+            // Provide custom collision layer parsing
+            collision_layers_fn: parse_collision_layers,
+            ..default()
+        }))
         .add_systems(Startup, setup)
         .run();
 }
@@ -90,37 +88,47 @@ fn main() {
 fn parse_collision_layers(groups_str: &str, mask_str: &str) -> CollisionLayers {
     // Parse collision group memberships
     let mut memberships = LayerMask(0);
-    for group in groups_str.split(',').map(str::trim).filter(|s| !s.is_empty()) {
-        memberships = LayerMask(memberships.0 | match group {
-            "player" => PLAYER.0,
-            "ground" => GROUND.0,
-            "enemies" => ENEMIES.0,
-            "collectibles" => COLLECTIBLES.0,
-            "player_projectile" => PLAYER_PROJECTILE.0,
-            "enemy_projectile" => ENEMY_PROJECTILE.0,
-            _ => {
-                warn!("Unknown collision group: '{}'", group);
-                0
-            }
-        });
+    for group in groups_str
+        .split(',')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
+        memberships = LayerMask(
+            memberships.0
+                | match group {
+                    "player" => PLAYER.0,
+                    "ground" => GROUND.0,
+                    "enemies" => ENEMIES.0,
+                    "collectibles" => COLLECTIBLES.0,
+                    "player_projectile" => PLAYER_PROJECTILE.0,
+                    "enemy_projectile" => ENEMY_PROJECTILE.0,
+                    _ => {
+                        warn!("Unknown collision group: '{}'", group);
+                        0
+                    }
+                },
+        );
     }
 
     // Parse collision mask filters
     let mut filters = LayerMask(0);
     for group in mask_str.split(',').map(str::trim).filter(|s| !s.is_empty()) {
-        filters = LayerMask(filters.0 | match group {
-            "player" => PLAYER.0,
-            "ground" => GROUND.0,
-            "enemies" => ENEMIES.0,
-            "collectibles" => COLLECTIBLES.0,
-            "player_projectile" => PLAYER_PROJECTILE.0,
-            "enemy_projectile" => ENEMY_PROJECTILE.0,
-            "all" => ALL.0,
-            _ => {
-                warn!("Unknown collision mask: '{}'", group);
-                0
-            }
-        });
+        filters = LayerMask(
+            filters.0
+                | match group {
+                    "player" => PLAYER.0,
+                    "ground" => GROUND.0,
+                    "enemies" => ENEMIES.0,
+                    "collectibles" => COLLECTIBLES.0,
+                    "player_projectile" => PLAYER_PROJECTILE.0,
+                    "enemy_projectile" => ENEMY_PROJECTILE.0,
+                    "all" => ALL.0,
+                    _ => {
+                        warn!("Unknown collision mask: '{}'", group);
+                        0
+                    }
+                },
+        );
     }
 
     // If no filters specified, default to colliding with everything
@@ -131,10 +139,7 @@ fn parse_collision_layers(groups_str: &str, mask_str: &str) -> CollisionLayers {
     CollisionLayers::new(memberships, filters)
 }
 
-fn setup(
-    mut commands: Commands,
-    asset_server: Res<AssetServer>,
-) {
+fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     // Spawn camera
     commands.spawn(Camera2d);
 

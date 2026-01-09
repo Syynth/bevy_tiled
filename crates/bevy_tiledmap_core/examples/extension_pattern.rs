@@ -151,27 +151,18 @@ impl Plugin for SimplePhysicsPlugin {
 ///
 /// Layer 2 provides pre-computed vertices in `TiledObject` - Layer 3 uses
 /// this data to create physics colliders without re-parsing.
-fn on_object_spawned(
-    trigger: On<ObjectSpawned>,
-    object_query: Query<(&TiledObject, &Name)>,
-) {
+fn on_object_spawned(trigger: On<ObjectSpawned>, object_query: Query<(&TiledObject, &Name)>) {
     let event = trigger.event();
     let Ok((tiled_object, object_name)) = object_query.get(event.entity) else {
         return;
     };
 
-    info!(
-        "🔧 SimplePhysicsPlugin: Object '{}' spawned",
-        object_name
-    );
+    info!("🔧 SimplePhysicsPlugin: Object '{}' spawned", object_name);
 
     // Match on object shape - vertices already pre-computed by Layer 2!
     match tiled_object {
         TiledObject::Rectangle { width, height } => {
-            info!(
-                "  ✓ Added rectangle collider: {}x{}",
-                width, height
-            );
+            info!("  ✓ Added rectangle collider: {}x{}", width, height);
             // In real plugin: commands.entity(event.entity).insert(Collider::cuboid(*width, *height));
         }
         TiledObject::Polygon { vertices } => {
@@ -182,20 +173,14 @@ fn on_object_spawned(
             // In real plugin: commands.entity(event.entity).insert(Collider::convex_hull(vertices.clone()));
         }
         TiledObject::Ellipse { width, height } => {
-            info!(
-                "  ✓ Added ellipse collider: {}x{}",
-                width, height
-            );
+            info!("  ✓ Added ellipse collider: {}x{}", width, height);
             // In real plugin: commands.entity(event.entity).insert(Collider::ball(width.max(*height) / 2.0));
         }
         TiledObject::Point => {
             info!("  ℹ Skipped point object (no collider needed)");
         }
         TiledObject::Polyline { vertices } => {
-            info!(
-                "  ✓ Added polyline collider with {} points",
-                vertices.len()
-            );
+            info!("  ✓ Added polyline collider with {} points", vertices.len());
             // In real plugin: commands.entity(event.entity).insert(Collider::polyline(vertices.clone()));
         }
         TiledObject::Tile { .. } => {

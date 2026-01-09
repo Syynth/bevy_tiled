@@ -9,7 +9,7 @@ use std::io::Write;
 use std::path::Path;
 
 use bevy::prelude::*;
-use bevy::reflect::{TypeInfo, TypeRegistry, TypeRegistration};
+use bevy::reflect::{TypeInfo, TypeRegistration, TypeRegistry};
 
 use super::registry::{
     TiledClassRegistry, TiledDefaultValue, TiledEnumInfo, TiledEnumKind, TiledTypeKind,
@@ -42,8 +42,8 @@ pub enum TiledValueExport {
     Int(i32),
     Float(f32),
     String(String),
-    Color(String),   // Hex format: #AARRGGBB
-    ClassDefault,    // Empty object {} for class types
+    Color(String), // Hex format: #AARRGGBB
+    ClassDefault,  // Empty object {} for class types
 }
 
 /// Intermediate representation of a Tiled enum type for serialization.
@@ -51,8 +51,8 @@ pub enum TiledValueExport {
 pub struct TiledEnumExport {
     pub id: usize,
     pub name: String,
-    pub values: Vec<String>,  // Variant names
-    pub values_as_flags: bool,  // Always false for now
+    pub values: Vec<String>,   // Variant names
+    pub values_as_flags: bool, // Always false for now
 }
 
 /// Wrapper for either a class type or enum type export.
@@ -94,12 +94,36 @@ pub fn build_export_data(registry: &TiledClassRegistry) -> Vec<TiledTypeExport> 
                 .iter()
                 .map(|field| {
                     let (tiled_type, property_type, value) = match &field.tiled_type {
-                        TiledTypeKind::Bool => ("bool".to_string(), None, convert_default_value(&field.default_value)),
-                        TiledTypeKind::Int => ("int".to_string(), None, convert_default_value(&field.default_value)),
-                        TiledTypeKind::Float => ("float".to_string(), None, convert_default_value(&field.default_value)),
-                        TiledTypeKind::String => ("string".to_string(), None, convert_default_value(&field.default_value)),
-                        TiledTypeKind::Color => ("color".to_string(), None, convert_default_value(&field.default_value)),
-                        TiledTypeKind::File => ("file".to_string(), None, TiledValueExport::String(String::new())),
+                        TiledTypeKind::Bool => (
+                            "bool".to_string(),
+                            None,
+                            convert_default_value(&field.default_value),
+                        ),
+                        TiledTypeKind::Int => (
+                            "int".to_string(),
+                            None,
+                            convert_default_value(&field.default_value),
+                        ),
+                        TiledTypeKind::Float => (
+                            "float".to_string(),
+                            None,
+                            convert_default_value(&field.default_value),
+                        ),
+                        TiledTypeKind::String => (
+                            "string".to_string(),
+                            None,
+                            convert_default_value(&field.default_value),
+                        ),
+                        TiledTypeKind::Color => (
+                            "color".to_string(),
+                            None,
+                            convert_default_value(&field.default_value),
+                        ),
+                        TiledTypeKind::File => (
+                            "file".to_string(),
+                            None,
+                            TiledValueExport::String(String::new()),
+                        ),
                         TiledTypeKind::Class { property_type } => {
                             // Check if this is actually an enum type
                             // Try exact match first, then fuzzy match by suffix
@@ -112,21 +136,34 @@ pub fn build_export_data(registry: &TiledClassRegistry) -> Vec<TiledTypeExport> 
                             if is_enum {
                                 // It's an enum - export as string with propertyType
                                 // Use the full name from the registry if available
-                                let full_name = registry.enum_names()
+                                let full_name = registry
+                                    .enum_names()
                                     .find(|name| {
                                         name.ends_with(&format!("::{}", property_type))
                                             || *name == *property_type
                                     })
                                     .unwrap_or(property_type);
-                                ("string".to_string(), Some(full_name.to_string()), TiledValueExport::String(String::new()))
+                                (
+                                    "string".to_string(),
+                                    Some(full_name.to_string()),
+                                    TiledValueExport::String(String::new()),
+                                )
                             } else {
                                 // It's a class - use ClassDefault (empty object {})
-                                ("class".to_string(), Some(property_type.to_string()), TiledValueExport::ClassDefault)
+                                (
+                                    "class".to_string(),
+                                    Some(property_type.to_string()),
+                                    TiledValueExport::ClassDefault,
+                                )
                             }
                         }
                         TiledTypeKind::Enum { property_type, .. } => {
                             // Enum fields are exported as string type with propertyType
-                            ("string".to_string(), Some(property_type.to_string()), TiledValueExport::String(String::new()))
+                            (
+                                "string".to_string(),
+                                Some(property_type.to_string()),
+                                TiledValueExport::String(String::new()),
+                            )
                         }
                     };
 
@@ -171,7 +208,11 @@ pub fn build_enum_export_data(registry: &TiledClassRegistry) -> Vec<TiledEnumExp
                 Some(TiledEnumExport {
                     id: i + 1,
                     name: enum_info.name.to_string(),
-                    values: enum_info.variant_names().iter().map(ToString::to_string).collect(),
+                    values: enum_info
+                        .variant_names()
+                        .iter()
+                        .map(ToString::to_string)
+                        .collect(),
                     values_as_flags: false,
                 })
             } else {
@@ -304,9 +345,7 @@ fn export_complex_enum(
                                 )
                             }
                         }
-                        TiledTypeKind::Enum {
-                            property_type, ..
-                        } => (
+                        TiledTypeKind::Enum { property_type, .. } => (
                             "string".to_string(),
                             Some(property_type.to_string()),
                             TiledValueExport::String(String::new()),
@@ -449,7 +488,7 @@ fn write_value(file: &mut File, value: &TiledValueExport) -> std::io::Result<()>
         TiledValueExport::Float(f) => write!(file, "{}", f),
         TiledValueExport::String(s) => write!(file, "\"{}\"", s),
         TiledValueExport::Color(hex) => write!(file, "\"{}\"", hex),
-        TiledValueExport::ClassDefault => write!(file, "null"),  // null for class types
+        TiledValueExport::ClassDefault => write!(file, "null"), // null for class types
     }
 }
 
@@ -525,7 +564,7 @@ fn write_mixed_types_to_file(
                     } else {
                         ""
                     };
-                    writeln!(file, "      \"{}\"{}",  variant, value_comma)?;
+                    writeln!(file, "      \"{}\"{}", variant, value_comma)?;
                 }
 
                 writeln!(file, "    ],")?;
@@ -586,19 +625,21 @@ pub fn export_all_types_with_reflection(
     let tiled_registry = world.resource::<TiledClassRegistry>();
 
     // Export class types
-    let type_names: Vec<String> = tiled_registry.type_names().map(ToString::to_string).collect();
+    let type_names: Vec<String> = tiled_registry
+        .type_names()
+        .map(ToString::to_string)
+        .collect();
     for type_name in type_names {
-        discover_type_recursive(
-            &type_name,
-            world,
-            &mut discovered_types,
-            &mut all_exports,
-        );
+        discover_type_recursive(&type_name, world, &mut discovered_types, &mut all_exports);
     }
 
     // Export enum types
     let simple_enum_exports = build_enum_export_data(tiled_registry);
-    all_exports.extend(simple_enum_exports.into_iter().map(TiledTypeOrEnumExport::Enum));
+    all_exports.extend(
+        simple_enum_exports
+            .into_iter()
+            .map(TiledTypeOrEnumExport::Enum),
+    );
 
     // Export complex enums (as class types) and their synthetic variant enums
     let mut next_id = all_exports.len() + 1;
@@ -678,12 +719,36 @@ fn discover_type_recursive(
             .iter()
             .map(|field| {
                 let (tiled_type, property_type, value) = match &field.tiled_type {
-                    TiledTypeKind::Bool => ("bool".to_string(), None, convert_default_value(&field.default_value)),
-                    TiledTypeKind::Int => ("int".to_string(), None, convert_default_value(&field.default_value)),
-                    TiledTypeKind::Float => ("float".to_string(), None, convert_default_value(&field.default_value)),
-                    TiledTypeKind::String => ("string".to_string(), None, convert_default_value(&field.default_value)),
-                    TiledTypeKind::Color => ("color".to_string(), None, convert_default_value(&field.default_value)),
-                    TiledTypeKind::File => ("file".to_string(), None, TiledValueExport::String(String::new())),
+                    TiledTypeKind::Bool => (
+                        "bool".to_string(),
+                        None,
+                        convert_default_value(&field.default_value),
+                    ),
+                    TiledTypeKind::Int => (
+                        "int".to_string(),
+                        None,
+                        convert_default_value(&field.default_value),
+                    ),
+                    TiledTypeKind::Float => (
+                        "float".to_string(),
+                        None,
+                        convert_default_value(&field.default_value),
+                    ),
+                    TiledTypeKind::String => (
+                        "string".to_string(),
+                        None,
+                        convert_default_value(&field.default_value),
+                    ),
+                    TiledTypeKind::Color => (
+                        "color".to_string(),
+                        None,
+                        convert_default_value(&field.default_value),
+                    ),
+                    TiledTypeKind::File => (
+                        "file".to_string(),
+                        None,
+                        TiledValueExport::String(String::new()),
+                    ),
                     TiledTypeKind::Class { property_type } => {
                         // Check if this is actually an enum type
                         // Try exact match first, then fuzzy match by suffix
@@ -696,21 +761,34 @@ fn discover_type_recursive(
                         if is_enum {
                             // It's an enum - export as string with propertyType
                             // Use the full name from the registry if available
-                            let full_name = tiled_registry.enum_names()
+                            let full_name = tiled_registry
+                                .enum_names()
                                 .find(|name| {
                                     name.ends_with(&format!("::{}", property_type))
                                         || *name == *property_type
                                 })
                                 .unwrap_or(property_type);
-                            ("string".to_string(), Some(full_name.to_string()), TiledValueExport::String(String::new()))
+                            (
+                                "string".to_string(),
+                                Some(full_name.to_string()),
+                                TiledValueExport::String(String::new()),
+                            )
                         } else {
                             // It's a class - use ClassDefault (empty object {})
-                            ("class".to_string(), Some(property_type.to_string()), TiledValueExport::ClassDefault)
+                            (
+                                "class".to_string(),
+                                Some(property_type.to_string()),
+                                TiledValueExport::ClassDefault,
+                            )
                         }
                     }
                     TiledTypeKind::Enum { property_type, .. } => {
                         // Enum types are exported as string with propertyType reference
-                        ("string".to_string(), Some(property_type.to_string()), TiledValueExport::String(String::new()))
+                        (
+                            "string".to_string(),
+                            Some(property_type.to_string()),
+                            TiledValueExport::String(String::new()),
+                        )
                     }
                 };
 
@@ -732,7 +810,8 @@ fn discover_type_recursive(
         // Recursively discover referenced types
         for field in tiled_class.fields {
             match &field.tiled_type {
-                TiledTypeKind::Class { property_type } | TiledTypeKind::Enum { property_type, .. } => {
+                TiledTypeKind::Class { property_type }
+                | TiledTypeKind::Enum { property_type, .. } => {
                     discover_type_recursive(property_type, world, discovered, output);
                 }
                 _ => {}
@@ -797,7 +876,11 @@ fn build_reflected_export(
                 };
                 (tiled_type, None, default_value)
             } else {
-                ("class".to_string(), Some(field_type_path.to_string()), TiledValueExport::ClassDefault)
+                (
+                    "class".to_string(),
+                    Some(field_type_path.to_string()),
+                    TiledValueExport::ClassDefault,
+                )
             };
 
             TiledMemberExport {
@@ -820,15 +903,7 @@ fn build_reflected_export(
 fn is_primitive_type(type_path: &str) -> bool {
     matches!(
         type_path,
-        "bool"
-            | "i32"
-            | "i64"
-            | "u32"
-            | "u64"
-            | "f32"
-            | "f64"
-            | "alloc::string::String"
-            | "&str"
+        "bool" | "i32" | "i64" | "u32" | "u64" | "f32" | "f64" | "alloc::string::String" | "&str"
     )
 }
 

@@ -4,7 +4,7 @@ use bevy::prelude::*;
 use tiled::LayerType;
 
 use crate::components::{LayerId, TiledLayer, TiledLayerMapOf};
-use crate::events::{TileLayerSpawned, ObjectLayerSpawned, ImageLayerSpawned, GroupLayerSpawned};
+use crate::events::{GroupLayerSpawned, ImageLayerSpawned, ObjectLayerSpawned, TileLayerSpawned};
 use crate::plugin::LayerZConfig;
 use crate::spawn::{build_image_layer_data, build_tile_layer_data, spawn_objects_layer};
 use crate::systems::SpawnContext;
@@ -134,8 +134,15 @@ pub fn spawn_layer(
                 if !child_layer.visible {
                     continue;
                 }
-                let child_entity =
-                    spawn_layer(commands, &child_layer, map_entity, context, type_registry, z_counter, z_config);
+                let child_entity = spawn_layer(
+                    commands,
+                    &child_layer,
+                    map_entity,
+                    context,
+                    type_registry,
+                    z_counter,
+                    z_config,
+                );
                 child_layer_entities.push(child_entity);
             }
             if !child_layer_entities.is_empty() {

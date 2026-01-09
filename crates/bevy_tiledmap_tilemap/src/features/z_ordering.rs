@@ -3,7 +3,9 @@
 //! Automatically sets Transform.z values based on layer IDs and hierarchy.
 
 use bevy::prelude::*;
-use bevy_tiledmap_core::events::{ImageLayerSpawned, ObjectLayerSpawned, ObjectSpawned, TileLayerSpawned};
+use bevy_tiledmap_core::events::{
+    ImageLayerSpawned, ObjectLayerSpawned, ObjectSpawned, TileLayerSpawned,
+};
 
 /// Configuration for z-ordering.
 ///

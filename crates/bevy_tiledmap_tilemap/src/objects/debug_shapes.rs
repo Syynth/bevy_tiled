@@ -13,10 +13,7 @@ use bevy_tiledmap_core::components::object::TiledObject;
 /// - Polyline: Cyan
 /// - Point: Red
 /// - Tile: Magenta (bounding box)
-pub fn render_object_shapes(
-    mut gizmos: Gizmos,
-    objects: Query<(&TiledObject, &GlobalTransform)>,
-) {
+pub fn render_object_shapes(mut gizmos: Gizmos, objects: Query<(&TiledObject, &GlobalTransform)>) {
     for (object, transform) in &objects {
         let position = transform.translation().truncate();
 
@@ -84,9 +81,7 @@ pub fn render_object_shapes(
                 }
             }
 
-            TiledObject::Tile {
-                width, height, ..
-            } => {
+            TiledObject::Tile { width, height, .. } => {
                 // Draw bounding box for tile objects
                 gizmos.rect_2d(
                     position + Vec2::new(*width / 2.0, *height / 2.0),

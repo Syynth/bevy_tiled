@@ -12,11 +12,11 @@ pub mod deserialize;
 pub mod export;
 pub mod registry;
 
-pub use deserialize::{deserialize_enum_from_string, DeserializeError, FromTiledProperty};
+pub use deserialize::{DeserializeError, FromTiledProperty, deserialize_enum_from_string};
 pub use export::{
+    TiledEnumExport, TiledMemberExport, TiledTypeExport, TiledTypeOrEnumExport, TiledValueExport,
     build_enum_export_data, build_export_data, export_all_types_with_reflection,
-    export_types_to_json, TiledEnumExport, TiledMemberExport, TiledTypeExport,
-    TiledTypeOrEnumExport, TiledValueExport,
+    export_types_to_json,
 };
 pub use registry::{
     TiledClassInfo, TiledClassRegistry, TiledDefaultValue, TiledEnumInfo, TiledEnumKind,

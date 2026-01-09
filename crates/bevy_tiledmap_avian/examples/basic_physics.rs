@@ -45,10 +45,7 @@ fn main() {
 
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     // Spawn camera
-    commands.spawn((
-        Camera2d,
-        Transform::from_xyz(0.0, 0.0, 1000.0),
-    ));
+    commands.spawn((Camera2d, Transform::from_xyz(0.0, 0.0, 1000.0)));
 
     // Load a Tiled map
     let map_handle: Handle<TiledMapAsset> = asset_server.load("maps/basic_physics.tmx");

@@ -33,7 +33,6 @@ pub struct TilemapPlugin {
     pub config: TilemapRenderConfig,
 }
 
-
 impl TilemapPlugin {
     /// Create plugin with custom configuration.
     pub fn new(config: TilemapRenderConfig) -> Self {

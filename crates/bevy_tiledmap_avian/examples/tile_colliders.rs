@@ -26,8 +26,8 @@
 
 use avian2d::prelude::*;
 use bevy::prelude::*;
-use bevy_tiledmap_avian::prelude::*;
 use bevy_tiledmap_assets::prelude::*;
+use bevy_tiledmap_avian::prelude::*;
 use bevy_tiledmap_core::prelude::*;
 
 fn main() {
@@ -42,10 +42,7 @@ fn main() {
         .run();
 }
 
-fn setup(
-    mut commands: Commands,
-    asset_server: Res<AssetServer>,
-) {
+fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     // Spawn camera
     commands.spawn(Camera2d);
 

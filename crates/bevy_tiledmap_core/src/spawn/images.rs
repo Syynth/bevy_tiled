@@ -42,7 +42,8 @@ pub fn build_image_layer_data(
     });
 
     // Calculate map pixel height for Layer 3 coordinate conversion
-    let map_pixel_height = context.map_asset.map.height as f32 * context.map_asset.map.tile_height as f32;
+    let map_pixel_height =
+        context.map_asset.map.height as f32 * context.map_asset.map.tile_height as f32;
 
     Some(ImageLayerData {
         image_handle,

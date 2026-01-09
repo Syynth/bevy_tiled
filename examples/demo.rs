@@ -149,11 +149,18 @@ fn log_project_properties(project_props: Res<TiledProjectProperties>) {
     for class in project_props.classes() {
         info!("  Class: {} ({} members)", class.name, class.members.len());
         for member in &class.members {
-            info!("    - {}: {} = {:?}", member.name, member.member_type, member.value);
+            info!(
+                "    - {}: {} = {:?}",
+                member.name, member.member_type, member.value
+            );
         }
     }
     for enum_def in project_props.enums() {
-        info!("  Enum: {} ({} values)", enum_def.name, enum_def.values.len());
+        info!(
+            "  Enum: {} ({} values)",
+            enum_def.name,
+            enum_def.values.len()
+        );
         for value in &enum_def.values {
             info!("    - {}", value);
         }

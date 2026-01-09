@@ -45,10 +45,7 @@ pub fn on_tile_object_spawned(
 
     // Get the image for this tile
     let Some(image_handle) = tileset.get_tile_image(*tile_id) else {
-        warn!(
-            "No image found for tile {} in tileset, skipping",
-            tile_id
-        );
+        warn!("No image found for tile {} in tileset, skipping", tile_id);
         return;
     };
 

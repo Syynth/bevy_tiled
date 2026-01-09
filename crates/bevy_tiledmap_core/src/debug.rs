@@ -1,7 +1,7 @@
 //! Debug visualization for Tiled maps.
 
-use bevy::prelude::*;
 use bevy::gizmos::gizmos::Gizmos;
+use bevy::prelude::*;
 
 use crate::components::map::MapGeometry;
 
@@ -59,14 +59,13 @@ pub fn draw_map_geometry_debug(
 
         // Draw corner markers for clarity
         let corner_size = geometry.tile_size.min_element() * 0.5;
-        let corners = [
-            min,
-            Vec2::new(max.x, min.y),
-            max,
-            Vec2::new(min.x, max.y),
-        ];
+        let corners = [min, Vec2::new(max.x, min.y), max, Vec2::new(min.x, max.y)];
         for corner in corners {
-            gizmos.circle_2d(Isometry2d::from_translation(corner), corner_size, config.bounds_color);
+            gizmos.circle_2d(
+                Isometry2d::from_translation(corner),
+                corner_size,
+                config.bounds_color,
+            );
         }
     }
 }

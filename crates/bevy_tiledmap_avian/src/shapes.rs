@@ -25,9 +25,7 @@ use bevy_tiledmap_core::components::object::TiledObject;
 /// | Text | `None` (no collider) |
 pub fn object_to_collider(object: &TiledObject) -> Option<Collider> {
     match object {
-        TiledObject::Rectangle { width, height } => {
-            Some(Collider::rectangle(*width, *height))
-        }
+        TiledObject::Rectangle { width, height } => Some(Collider::rectangle(*width, *height)),
 
         TiledObject::Ellipse { width, height } => {
             // Use the maximum dimension as diameter for the circle
@@ -61,11 +59,7 @@ pub fn object_to_collider(object: &TiledObject) -> Option<Collider> {
             Some(Collider::circle(1.0))
         }
 
-        TiledObject::Tile {
-            width,
-            height,
-            ..
-        } => {
+        TiledObject::Tile { width, height, .. } => {
             // Phase 1: Use object bounds as rectangle collider
             // Phase 4: Extract collision shape from tileset
             Some(Collider::rectangle(*width, *height))
@@ -155,7 +149,10 @@ pub fn get_tile_collision_shape(
                 let offset_x = shape_center_x - tile_center_x;
                 let offset_y = -(shape_center_y - tile_center_y);
 
-                (Collider::rectangle(*width, *height), Vec2::new(offset_x, offset_y))
+                (
+                    Collider::rectangle(*width, *height),
+                    Vec2::new(offset_x, offset_y),
+                )
             }
 
             tiled::ObjectShape::Ellipse { width, height } => {
@@ -177,10 +174,7 @@ pub fn get_tile_collision_shape(
                 let offset_y = -(object.y - tile_center_y);
 
                 // Flip Y for Bevy's Y-up coordinate system
-                let vertices: Vec<Vec2> = points
-                    .iter()
-                    .map(|(x, y)| Vec2::new(*x, -*y))
-                    .collect();
+                let vertices: Vec<Vec2> = points.iter().map(|(x, y)| Vec2::new(*x, -*y)).collect();
 
                 let collider = if let Some(convex) = Collider::convex_hull(vertices.clone()) {
                     convex
@@ -196,19 +190,23 @@ pub fn get_tile_collision_shape(
                 let offset_x = object.x - tile_center_x;
                 let offset_y = -(object.y - tile_center_y);
 
-                let vertices: Vec<Vec2> = points
-                    .iter()
-                    .map(|(x, y)| Vec2::new(*x, -*y))
-                    .collect();
+                let vertices: Vec<Vec2> = points.iter().map(|(x, y)| Vec2::new(*x, -*y)).collect();
 
-                (Collider::polyline(vertices, None), Vec2::new(offset_x, offset_y))
+                (
+                    Collider::polyline(vertices, None),
+                    Vec2::new(offset_x, offset_y),
+                )
             }
 
             tiled::ObjectShape::Point(x, y) => {
                 // Point position relative to tile center
                 let offset_x = *x - tile_center_x;
                 let offset_y = -(*y - tile_center_y);
-                colliders.push((Vec2::new(offset_x, offset_y), rotation, Collider::circle(1.0)));
+                colliders.push((
+                    Vec2::new(offset_x, offset_y),
+                    rotation,
+                    Collider::circle(1.0),
+                ));
                 continue;
             }
 
@@ -282,7 +280,10 @@ pub fn get_tile_collision_shapes(
                 let shape_center_y = object.y + height / 2.0;
                 let offset_x = shape_center_x - tile_center_x;
                 let offset_y = -(shape_center_y - tile_center_y);
-                (Collider::rectangle(*width, *height), Vec2::new(offset_x, offset_y))
+                (
+                    Collider::rectangle(*width, *height),
+                    Vec2::new(offset_x, offset_y),
+                )
             }
             tiled::ObjectShape::Ellipse { width, height } => {
                 let radius = width.max(*height) / 2.0;
@@ -304,7 +305,10 @@ pub fn get_tile_collision_shapes(
                 let offset_x = object.x - tile_center_x;
                 let offset_y = -(object.y - tile_center_y);
                 let vertices: Vec<Vec2> = points.iter().map(|(x, y)| Vec2::new(*x, -*y)).collect();
-                (Collider::polyline(vertices, None), Vec2::new(offset_x, offset_y))
+                (
+                    Collider::polyline(vertices, None),
+                    Vec2::new(offset_x, offset_y),
+                )
             }
             tiled::ObjectShape::Point(x, y) => {
                 let offset_x = *x - tile_center_x;
@@ -424,7 +428,11 @@ mod tests {
     #[test]
     fn test_polyline_to_collider() {
         let object = TiledObject::Polyline {
-            vertices: vec![Vec2::new(0.0, 0.0), Vec2::new(10.0, 0.0), Vec2::new(10.0, 10.0)],
+            vertices: vec![
+                Vec2::new(0.0, 0.0),
+                Vec2::new(10.0, 0.0),
+                Vec2::new(10.0, 10.0),
+            ],
         };
         let collider = object_to_collider(&object);
         assert!(collider.is_some());
