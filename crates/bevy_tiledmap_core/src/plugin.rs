@@ -160,6 +160,9 @@ impl Plugin for TiledmapCorePlugin {
         // Insert default layer Z config (can be overridden by user)
         app.init_resource::<LayerZConfig>();
 
+        // Initialize world Z counters for shared layer Z-ordering across maps
+        app.init_resource::<crate::systems::spawn::WorldZCounters>();
+
         // Schedule type export at startup if configured
         // Must be done at startup to have access to AppTypeRegistry for reflection
         if let Some(path) = &self.config.export_types_path {

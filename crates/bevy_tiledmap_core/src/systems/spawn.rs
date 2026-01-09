@@ -2,6 +2,7 @@
 
 use bevy::asset::RecursiveDependencyLoadState;
 use bevy::prelude::*;
+use std::collections::HashMap;
 use bevy_tiledmap_assets::prelude::{TiledMapAsset, TiledTilesetAsset, TiledWorldAsset};
 
 use crate::components::{MapsInWorld, TiledMap, TiledWorld, TiledWorldOf};
@@ -9,6 +10,13 @@ use crate::events::{MapSpawned, WorldSpawned};
 use crate::plugin::LayerZConfig;
 use crate::spawn::spawn_map;
 use crate::systems::SpawnContext;
+
+/// Resource tracking Z-ordering counters per world.
+///
+/// Maps in a world share a single Z counter so layers across all maps
+/// get unique, sequential Z values without collisions.
+#[derive(Resource, Default)]
+pub struct WorldZCounters(pub HashMap<Entity, usize>);
 
 /// Marker component to trigger map respawning.
 ///
@@ -38,16 +46,17 @@ pub fn process_loaded_maps(
     registry: Res<crate::properties::TiledClassRegistry>,
     type_registry: Res<AppTypeRegistry>,
     z_config: Res<LayerZConfig>,
+    mut world_z_counters: ResMut<WorldZCounters>,
     mut commands: Commands,
     mut map_query: Query<
-        (Entity, &TiledMap),
+        (Entity, &TiledMap, Option<&TiledWorldOf>),
         Or<(
             Without<crate::components::LayersInMap>,
             With<RespawnTiledMap>,
         )>,
     >,
 ) {
-    for (map_entity, tiled_map) in map_query.iter_mut() {
+    for (map_entity, tiled_map, world_of) in map_query.iter_mut() {
         info!("Processing map entity {:?}", map_entity);
 
         // Check if all dependencies have finished loading
@@ -98,13 +107,23 @@ pub fn process_loaded_maps(
             &asset_server,
         );
 
-        // Spawn the map hierarchy
+        // Get or initialize z_counter: use world counter if in a world, else use 0
+        let z_counter = if let Some(TiledWorldOf(world_entity)) = world_of {
+            world_z_counters.0.entry(*world_entity).or_insert(0)
+        } else {
+            // Standalone map - use a temporary counter
+            // (we store it anyway to simplify the borrow, but it won't persist)
+            world_z_counters.0.entry(map_entity).or_insert(0)
+        };
+
+        // Spawn the map hierarchy with shared z_counter
         spawn_map(
             &mut commands,
             map_entity,
             &context,
             &type_registry,
             &z_config,
+            z_counter,
         );
 
         info!("Map hierarchy spawned successfully");

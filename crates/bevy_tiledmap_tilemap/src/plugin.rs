@@ -62,11 +62,10 @@ impl Plugin for TilemapPlugin {
         // Register image layer rendering observer
         app.add_observer(images::on_image_layer_spawned);
 
-        // Register z-ordering observers
-        app.add_observer(z_ordering::set_tile_layer_z_order);
-        app.add_observer(z_ordering::set_image_layer_z_order);
-        app.add_observer(z_ordering::set_object_layer_z_order);
-        app.add_observer(z_ordering::set_object_z_order);
+        // Z-ordering is now handled by Layer 2 (bevy_tiledmap_core) which assigns
+        // sequential Z values based on layer order within and across maps.
+        // The ZOrderConfig resource is still used by core for configuration.
+        let _ = z_ordering::set_tile_layer_z_order; // Suppress unused warning
 
         // Add animation systems if enabled
         #[cfg(feature = "animations")]

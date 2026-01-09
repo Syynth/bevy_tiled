@@ -15,22 +15,23 @@ use crate::systems::SpawnContext;
 /// - Image layers: `ImageLayerData`
 /// - Group layers: Recursive layer hierarchy
 ///
-/// # arguments
+/// # Arguments
 ///
 /// * `commands` - Bevy commands for entity spawning
 /// * `map_entity` - The entity with the `TiledMap` component
 /// * `context` - Spawn context with asset data access
 /// * `type_registry` - App type registry for reflection-based component insertion
 /// * `z_config` - Configuration for layer z-ordering
+/// * `z_counter` - Mutable counter for sequential Z values (shared across maps in a world)
 pub fn spawn_map(
     commands: &mut Commands,
     map_entity: Entity,
     context: &SpawnContext,
     type_registry: &AppTypeRegistry,
     z_config: &LayerZConfig,
+    z_counter: &mut usize,
 ) {
     let mut layer_entities = Vec::new();
-    let mut z_counter: usize = 0;
 
     // Spawn each top-level layer (spawn_layer handles recursion for groups)
     // Skip hidden layers - they won't be spawned at all
@@ -44,7 +45,7 @@ pub fn spawn_map(
             map_entity,
             context,
             type_registry,
-            &mut z_counter,
+            z_counter,
             z_config,
         );
         layer_entities.push(layer_entity);
