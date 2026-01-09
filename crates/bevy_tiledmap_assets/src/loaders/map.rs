@@ -238,17 +238,43 @@ fn calculate_infinite_map_data(map: &tiled::Map) -> (Vec2, (i32, i32), (i32, i32
         let chunk_width = tiled::ChunkData::WIDTH;
         let chunk_height = tiled::ChunkData::HEIGHT;
 
-        for layer in map.layers() {
-            if let Some(tile_layer) = layer.as_tile_layer()
-                && let tiled::TileLayer::Infinite(infinite_layer) = tile_layer
-            {
-                for ((chunk_x, chunk_y), _chunk) in infinite_layer.chunks() {
-                    min_chunk_x = min_chunk_x.min(chunk_x);
-                    min_chunk_y = min_chunk_y.min(chunk_y);
-                    max_chunk_x = max_chunk_x.max(chunk_x);
-                    max_chunk_y = max_chunk_y.max(chunk_y);
+        // Recursively collect chunk bounds from all layers (including nested group layers)
+        fn collect_chunk_bounds<'a>(
+            layers: impl Iterator<Item = tiled::Layer<'a>>,
+            min_x: &mut i32,
+            min_y: &mut i32,
+            max_x: &mut i32,
+            max_y: &mut i32,
+        ) {
+            for layer in layers {
+                match layer.layer_type() {
+                    tiled::LayerType::Tiles(tiled::TileLayer::Infinite(infinite_layer)) => {
+                        for ((chunk_x, chunk_y), _chunk) in infinite_layer.chunks() {
+                            *min_x = (*min_x).min(chunk_x);
+                            *min_y = (*min_y).min(chunk_y);
+                            *max_x = (*max_x).max(chunk_x);
+                            *max_y = (*max_y).max(chunk_y);
+                        }
+                    }
+                    tiled::LayerType::Group(group) => {
+                        collect_chunk_bounds(group.layers(), min_x, min_y, max_x, max_y);
+                    }
+                    _ => {}
                 }
             }
+        }
+
+        collect_chunk_bounds(
+            map.layers(),
+            &mut min_chunk_x,
+            &mut min_chunk_y,
+            &mut max_chunk_x,
+            &mut max_chunk_y,
+        );
+
+        // Handle case where no chunks were found
+        if min_chunk_x == i32::MAX {
+            return (Vec2::ZERO, (0, 0), (0, 0));
         }
 
         // Calculate offset to shift map into positive space

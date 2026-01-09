@@ -88,8 +88,17 @@ fn build_infinite_tile_layer_data(
     for ((chunk_x, chunk_y), _chunk) in infinite_layer.chunks() {
         // Calculate the tile offset for this chunk
         // Shift by min_chunk to normalize negative chunks to positive indices
-        let chunk_offset_x = (chunk_x - min_chunk_x) as u32 * chunk_width;
-        let chunk_offset_y = (chunk_y - min_chunk_y) as u32 * chunk_height;
+        // Use checked subtraction to catch any unexpected chunk positions
+        let Some(rel_chunk_x) = chunk_x.checked_sub(min_chunk_x).and_then(|v| u32::try_from(v).ok()) else {
+            warn!("Chunk at ({}, {}) is outside expected bounds (min: {}, {})", chunk_x, chunk_y, min_chunk_x, min_chunk_y);
+            continue;
+        };
+        let Some(rel_chunk_y) = chunk_y.checked_sub(min_chunk_y).and_then(|v| u32::try_from(v).ok()) else {
+            warn!("Chunk at ({}, {}) is outside expected bounds (min: {}, {})", chunk_x, chunk_y, min_chunk_x, min_chunk_y);
+            continue;
+        };
+        let chunk_offset_x = rel_chunk_x * chunk_width;
+        let chunk_offset_y = rel_chunk_y * chunk_height;
 
         // Iterate tiles within the chunk (0..16 for both x and y)
         for local_y in 0..chunk_height {
