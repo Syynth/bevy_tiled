@@ -197,7 +197,6 @@ impl Plugin for TiledmapCorePlugin {
         );
 
         // Enable debug visualization by default (remove this line to disable)
-        app.init_resource::<DebugMapGeometry>();
 
         // Add debug visualization system (only runs when DebugMapGeometry resource is present)
         app.add_systems(
