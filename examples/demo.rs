@@ -28,7 +28,7 @@ fn main() {
         // Add bevy_tiledmap with type export and project loading
         .add_plugins(BevyTiledmapPlugin {
             core: TiledmapCoreConfig {
-                export_types_path: Some("assets/tiled_types.json".into()),
+                export_target: Some(TypeExportTarget::JsonFile("assets/tiled_types.json".into())),
                 project_path: Some("everything.tiled-project".into()),
             },
             ..default()

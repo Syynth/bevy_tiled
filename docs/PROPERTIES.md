@@ -393,11 +393,12 @@ fn inspect_properties(query: Query<(Entity, &MergedProperties, &TiledObject)>) {
 **1. Configure the plugin:**
 
 ```rust
-use bevy_tiled_core::{BevyTiledCorePlugin, BevyTiledCoreConfig};
+use bevy_tiledmap_core::{TiledmapCorePlugin, TiledmapCoreConfig, TypeExportTarget};
 
 App::new()
-    .add_plugins(BevyTiledCorePlugin::new(BevyTiledCoreConfig {
-        export_types_path: Some("assets/tiled-types.json".into()),
+    .add_plugins(TiledmapCorePlugin::new(TiledmapCoreConfig {
+        export_target: Some(TypeExportTarget::JsonFile("assets/tiled-types.json".into())),
+        ..default()
     }))
     .run();
 ```

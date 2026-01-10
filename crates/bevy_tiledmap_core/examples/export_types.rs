@@ -22,7 +22,7 @@ fn main() {
         .add_plugins(TiledmapAssetsPlugin)
         // Configure plugin to export types on startup
         .add_plugins(TiledmapCorePlugin::new(TiledmapCoreConfig {
-            export_types_path: Some("exported_types.json".into()),
+            export_target: Some(TypeExportTarget::JsonFile("exported_types.json".into())),
             ..default()
         }))
         .add_systems(Startup, (print_info, exit_after_export))

@@ -253,7 +253,7 @@ struct Enemy {
 ```
 
 In Tiled:
-1. Export types: Run app with `BevyTiledCorePlugin::new(BevyTiledCoreConfig { export_types_path: Some("types.json") })`
+1. Export types: Run app with `TiledmapCorePlugin::new(TiledmapCoreConfig { export_target: Some(TypeExportTarget::JsonFile("types.json".into())), ..default() })`
 2. Import in Tiled: View → Custom Types → Import
 3. Add properties: Select object → Add Property → Choose "game::Enemy" from dropdown
 
@@ -686,7 +686,7 @@ fn list_maps_in_world(
 
 ### "Properties aren't working"
 
-1. Export types: Set `export_types_path` in plugin config
+1. Export types: Set `export_target` in plugin config
 2. Import in Tiled: View → Custom Types → Import
 3. Verify #[tiled(name = "...")] matches Tiled's property type name exactly
 4. Check property type (must be "class", not basic type)

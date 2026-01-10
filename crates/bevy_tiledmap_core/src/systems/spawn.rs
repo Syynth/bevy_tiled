@@ -2,8 +2,8 @@
 
 use bevy::asset::RecursiveDependencyLoadState;
 use bevy::prelude::*;
-use std::collections::HashMap;
 use bevy_tiledmap_assets::prelude::{TiledMapAsset, TiledTilesetAsset, TiledWorldAsset};
+use std::collections::HashMap;
 
 use crate::components::{MapsInWorld, TiledMap, TiledWorld, TiledWorldOf};
 use crate::events::{MapSpawned, WorldSpawned};

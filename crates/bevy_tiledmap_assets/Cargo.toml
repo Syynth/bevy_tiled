@@ -8,6 +8,7 @@ keywords = ["bevy", "tiled", "assets", "gamedev"]
 
 [dependencies]
 bevy = { version = "0.17", default-features = false, features = ["bevy_asset", "bevy_render"] }
+normalize-path = "0.2"
 tiled = { version = "0.15", features = ["world"] }
 thiserror = "2"
 

@@ -16,7 +16,7 @@ fn main() {
         .add_plugins(TiledmapAssetsPlugin)
         .add_plugins(TiledmapCorePlugin::new(TiledmapCoreConfig {
             // Export to current directory
-            export_types_path: Some("tiled_types.json".into()),
+            export_target: Some(TypeExportTarget::JsonFile("tiled_types.json".into())),
             ..default()
         }));
 

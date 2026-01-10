@@ -3,8 +3,8 @@
 //! Generates a JSON file in the format expected by Tiled's custom property system.
 //! See: <https://doc.mapeditor.org/en/stable/manual/custom-properties/>
 
-use std::collections::HashSet;
-use std::fs::File;
+use std::collections::{BTreeSet, HashMap, HashSet};
+use std::fs::{self, File};
 use std::io::Write;
 use std::path::Path;
 
@@ -188,7 +188,7 @@ pub fn build_export_data(registry: &TiledClassRegistry) -> Vec<TiledTypeExport> 
 /// Generate export data for all registered enum types.
 ///
 /// This function converts enum registry entries into an intermediate representation
-/// suitable for serialization.
+/// suitable for serialization. Enums are sorted by name for deterministic ID assignment.
 ///
 /// # Arguments
 ///
@@ -198,8 +198,12 @@ pub fn build_export_data(registry: &TiledClassRegistry) -> Vec<TiledTypeExport> 
 ///
 /// Vector of `TiledEnumExport` representing all registered enums
 pub fn build_enum_export_data(registry: &TiledClassRegistry) -> Vec<TiledEnumExport> {
-    registry
-        .iter_enums()
+    // Collect and sort enums by name for deterministic ordering
+    let mut enums: Vec<_> = registry.iter_enums().collect();
+    enums.sort_by_key(|e| e.name);
+
+    enums
+        .iter()
         .enumerate()
         .filter_map(|(i, enum_info)| {
             // Only export simple enums here
@@ -263,7 +267,7 @@ fn export_complex_enum(
     };
 
     let mut members = Vec::new();
-    let mut field_types = std::collections::HashMap::new();
+    let mut field_types = HashMap::new();
 
     // Add :variant discriminant field first
     let default_variant = enum_info.default_variant_name().unwrap_or("");
@@ -593,6 +597,111 @@ fn write_mixed_types_to_file(
 }
 
 // ============================================================================
+// ID Preservation for Stable Exports
+// ============================================================================
+
+/// Read existing type/enum IDs from a JSON file.
+///
+/// Returns a mapping of type name to ID. If the file doesn't exist or is invalid,
+/// returns an empty map.
+fn read_existing_ids(path: &Path) -> HashMap<String, usize> {
+    let Ok(content) = fs::read_to_string(path) else {
+        return HashMap::new();
+    };
+
+    let Ok(json): Result<serde_json::Value, _> = serde_json::from_str(&content) else {
+        return HashMap::new();
+    };
+
+    let mut ids = HashMap::new();
+
+    // Handle both standalone array format and .tiled-project format
+    let property_types = if let Some(arr) = json.as_array() {
+        // Standalone JSON array format
+        arr.clone()
+    } else if let Some(obj) = json.as_object() {
+        // .tiled-project format with propertyTypes field
+        obj.get("propertyTypes")
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default()
+    } else {
+        return HashMap::new();
+    };
+
+    for item in property_types {
+        if let (Some(name), Some(id)) = (
+            item.get("name").and_then(serde_json::Value::as_str),
+            item.get("id").and_then(serde_json::Value::as_u64),
+        ) {
+            ids.insert(name.to_string(), id as usize);
+        }
+    }
+
+    ids
+}
+
+/// Assign IDs to exports, preserving existing IDs and filling gaps for new types.
+///
+/// This function:
+/// 1. Assigns existing IDs to types that already have them
+/// 2. Collects gaps in the ID sequence (unused IDs between 1 and max)
+/// 3. Assigns new types to gap IDs first
+/// 4. Continues counting from `max_id` + 1 for any remaining new types
+fn assign_ids_with_preservation(
+    exports: &mut [TiledTypeOrEnumExport],
+    existing_ids: &HashMap<String, usize>,
+) {
+    // Track which IDs are used
+    let mut used_ids = BTreeSet::new();
+    let mut max_id = 0usize;
+
+    // First pass: assign existing IDs to matching types
+    for export in exports.iter_mut() {
+        let name = match export {
+            TiledTypeOrEnumExport::Type(t) => &t.name,
+            TiledTypeOrEnumExport::Enum(e) => &e.name,
+        };
+
+        if let Some(&existing_id) = existing_ids.get(name) {
+            match export {
+                TiledTypeOrEnumExport::Type(t) => t.id = existing_id,
+                TiledTypeOrEnumExport::Enum(e) => e.id = existing_id,
+            }
+            used_ids.insert(existing_id);
+            max_id = max_id.max(existing_id);
+        }
+    }
+
+    // Find gaps in the sequence (IDs between 1 and max that are unused)
+    let mut gaps: Vec<usize> = (1..=max_id).filter(|id| !used_ids.contains(id)).collect();
+    gaps.reverse(); // So we can pop from the end
+
+    // Second pass: assign IDs to new types using gaps first, then incrementing
+    let mut next_id = max_id + 1;
+    for export in exports.iter_mut() {
+        let current_id = match export {
+            TiledTypeOrEnumExport::Type(t) => t.id,
+            TiledTypeOrEnumExport::Enum(e) => e.id,
+        };
+
+        // If ID is still 0, it's a new type that needs an ID
+        if current_id == 0 {
+            let new_id = gaps.pop().unwrap_or_else(|| {
+                let id = next_id;
+                next_id += 1;
+                id
+            });
+
+            match export {
+                TiledTypeOrEnumExport::Type(t) => t.id = new_id,
+                TiledTypeOrEnumExport::Enum(e) => e.id = new_id,
+            }
+        }
+    }
+}
+
+// ============================================================================
 // Reflection-based Export (Hybrid Approach)
 // ============================================================================
 
@@ -624,11 +733,12 @@ pub fn export_all_types_with_reflection(
     // Start with all TiledClass types
     let tiled_registry = world.resource::<TiledClassRegistry>();
 
-    // Export class types
-    let type_names: Vec<String> = tiled_registry
+    // Export class types (sorted for deterministic ID assignment)
+    let mut type_names: Vec<String> = tiled_registry
         .type_names()
         .map(ToString::to_string)
         .collect();
+    type_names.sort();
     for type_name in type_names {
         discover_type_recursive(&type_name, world, &mut discovered_types, &mut all_exports);
     }
@@ -642,36 +752,42 @@ pub fn export_all_types_with_reflection(
     );
 
     // Export complex enums (as class types) and their synthetic variant enums
+    // Sort by name for deterministic ordering
+    let mut complex_enums: Vec<_> = tiled_registry
+        .iter_enums()
+        .filter(|e| e.is_complex())
+        .collect();
+    complex_enums.sort_by_key(|e| e.name);
+
     let mut next_id = all_exports.len() + 1;
-    for enum_info in tiled_registry.iter_enums() {
-        if enum_info.is_complex() {
-            // Export the complex enum as a class type
-            let complex_export = export_complex_enum(enum_info, next_id, tiled_registry);
-            all_exports.push(TiledTypeOrEnumExport::Type(complex_export));
-            next_id += 1;
+    for enum_info in complex_enums {
+        // Export the complex enum as a class type
+        let complex_export = export_complex_enum(enum_info, next_id, tiled_registry);
+        all_exports.push(TiledTypeOrEnumExport::Type(complex_export));
+        next_id += 1;
 
-            // Export the synthetic :::variant enum
-            let variant_enum = generate_variant_names_enum(enum_info, next_id);
-            all_exports.push(TiledTypeOrEnumExport::Enum(variant_enum));
-            next_id += 1;
+        // Export the synthetic :::variant enum
+        let variant_enum = generate_variant_names_enum(enum_info, next_id);
+        all_exports.push(TiledTypeOrEnumExport::Enum(variant_enum));
+        next_id += 1;
 
-            // Recursively discover referenced types in variant fields
-            if let Some(variant_info_slice) = enum_info.variant_info() {
-                for variant in variant_info_slice {
-                    if let Some(fields) = match &variant.kind {
-                        TiledVariantKind::Unit => None,
-                        TiledVariantKind::Struct { fields }
-                        | TiledVariantKind::Tuple { fields } => Some(*fields),
-                    } {
-                        for field in fields {
-                            if let TiledTypeKind::Class { property_type } = &field.tiled_type {
-                                discover_type_recursive(
-                                    property_type,
-                                    world,
-                                    &mut discovered_types,
-                                    &mut all_exports,
-                                );
-                            }
+        // Recursively discover referenced types in variant fields
+        if let Some(variant_info_slice) = enum_info.variant_info() {
+            for variant in variant_info_slice {
+                if let Some(fields) = match &variant.kind {
+                    TiledVariantKind::Unit => None,
+                    TiledVariantKind::Struct { fields } | TiledVariantKind::Tuple { fields } => {
+                        Some(*fields)
+                    }
+                } {
+                    for field in fields {
+                        if let TiledTypeKind::Class { property_type } = &field.tiled_type {
+                            discover_type_recursive(
+                                property_type,
+                                world,
+                                &mut discovered_types,
+                                &mut all_exports,
+                            );
                         }
                     }
                 }
@@ -679,20 +795,258 @@ pub fn export_all_types_with_reflection(
         }
     }
 
-    // Renumber IDs sequentially
-    for (i, item) in all_exports.iter_mut().enumerate() {
-        match item {
-            TiledTypeOrEnumExport::Type(type_export) => type_export.id = i + 1,
-            TiledTypeOrEnumExport::Enum(enum_export) => enum_export.id = i + 1,
-        }
-    }
+    // Assign IDs, preserving existing ones from file if it exists
+    let path = output_path.as_ref();
+    let existing_ids = read_existing_ids(path);
+    assign_ids_with_preservation(&mut all_exports, &existing_ids);
 
     // Write to file
-    let path = output_path.as_ref();
     let mut file = File::create(path)?;
     write_mixed_types_to_file(&mut file, &all_exports)?;
 
     Ok(())
+}
+
+/// Export types directly to a `.tiled-project` file.
+///
+/// This function updates the `propertyTypes` array in the project file while
+/// preserving all other fields (folders, commands, compatibilityVersion, etc.).
+///
+/// Merge behavior:
+/// - Existing types that match Rust types (by name) are updated with new definitions
+/// - Manually-added types that don't match any Rust type are preserved
+/// - New Rust types are added with IDs that fill gaps or increment from max
+///
+/// # Arguments
+///
+/// * `world` - The Bevy World (for accessing registries)
+/// * `project_path` - Path to the `.tiled-project` file
+///
+/// # Example
+///
+/// ```ignore
+/// export_to_tiled_project(world, "assets/my.tiled-project")?;
+/// ```
+pub fn export_to_tiled_project(
+    world: &World,
+    project_path: impl AsRef<Path>,
+) -> std::io::Result<()> {
+    let path = project_path.as_ref();
+
+    // Read existing project file or create default structure
+    let mut project_json: serde_json::Value = if path.exists() {
+        let content = fs::read_to_string(path)?;
+        serde_json::from_str(&content)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))?
+    } else {
+        // Create a minimal default project structure
+        serde_json::json!({
+            "automappingRulesFile": "",
+            "commands": [],
+            "compatibilityVersion": 1100,
+            "extensionsPath": "extensions",
+            "folders": ["."],
+            "properties": [],
+            "propertyTypes": []
+        })
+    };
+
+    // Build all exports using the same logic as export_all_types_with_reflection
+    let mut all_exports = build_all_exports(world);
+
+    // Read existing IDs from the project file
+    let existing_ids = read_existing_ids(path);
+
+    // Also track which names exist in the project but not in our exports
+    // (manually-added types that should be preserved)
+    let exported_names: HashSet<String> = all_exports
+        .iter()
+        .map(|e| match e {
+            TiledTypeOrEnumExport::Type(t) => t.name.clone(),
+            TiledTypeOrEnumExport::Enum(e) => e.name.clone(),
+        })
+        .collect();
+
+    // Get manually-added types from existing project
+    let manual_types: Vec<serde_json::Value> = project_json
+        .get("propertyTypes")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter(|item| {
+                    item.get("name")
+                        .and_then(|n| n.as_str())
+                        .map(|name| !exported_names.contains(name))
+                        .unwrap_or(false)
+                })
+                .cloned()
+                .collect()
+        })
+        .unwrap_or_default();
+
+    // Add manual type IDs to existing_ids so they're considered when assigning new IDs
+    let mut all_existing_ids = existing_ids;
+    for item in &manual_types {
+        if let (Some(name), Some(id)) = (
+            item.get("name").and_then(serde_json::Value::as_str),
+            item.get("id").and_then(serde_json::Value::as_u64),
+        ) {
+            all_existing_ids.insert(name.to_string(), id as usize);
+        }
+    }
+
+    // Assign IDs with preservation
+    assign_ids_with_preservation(&mut all_exports, &all_existing_ids);
+
+    // Convert exports to JSON values
+    let mut property_types: Vec<serde_json::Value> = Vec::new();
+
+    for export in &all_exports {
+        let json_value = match export {
+            TiledTypeOrEnumExport::Type(t) => export_type_to_json(t),
+            TiledTypeOrEnumExport::Enum(e) => export_enum_to_json(e),
+        };
+        property_types.push(json_value);
+    }
+
+    // Add back manually-added types
+    property_types.extend(manual_types);
+
+    // Sort by ID for clean output
+    property_types.sort_by_key(|v| v.get("id").and_then(serde_json::Value::as_u64).unwrap_or(0));
+
+    // Update the propertyTypes array in the project
+    project_json["propertyTypes"] = serde_json::Value::Array(property_types);
+
+    // Write back with pretty formatting
+    let output = serde_json::to_string_pretty(&project_json)
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    fs::write(path, output)?;
+
+    Ok(())
+}
+
+/// Build all exports without writing to a file.
+///
+/// This is a helper that extracts the export-building logic for reuse.
+fn build_all_exports(world: &World) -> Vec<TiledTypeOrEnumExport> {
+    let mut discovered_types = HashSet::new();
+    let mut all_exports = Vec::new();
+
+    let tiled_registry = world.resource::<TiledClassRegistry>();
+
+    // Export class types (sorted for deterministic ordering)
+    let mut type_names: Vec<String> = tiled_registry
+        .type_names()
+        .map(ToString::to_string)
+        .collect();
+    type_names.sort();
+    for type_name in type_names {
+        discover_type_recursive(&type_name, world, &mut discovered_types, &mut all_exports);
+    }
+
+    // Export simple enum types (sorted)
+    let simple_enum_exports = build_enum_export_data(tiled_registry);
+    all_exports.extend(
+        simple_enum_exports
+            .into_iter()
+            .map(TiledTypeOrEnumExport::Enum),
+    );
+
+    // Export complex enums (sorted)
+    let mut complex_enums: Vec<_> = tiled_registry
+        .iter_enums()
+        .filter(|e| e.is_complex())
+        .collect();
+    complex_enums.sort_by_key(|e| e.name);
+
+    let mut next_id = all_exports.len() + 1;
+    for enum_info in complex_enums {
+        let complex_export = export_complex_enum(enum_info, next_id, tiled_registry);
+        all_exports.push(TiledTypeOrEnumExport::Type(complex_export));
+        next_id += 1;
+
+        let variant_enum = generate_variant_names_enum(enum_info, next_id);
+        all_exports.push(TiledTypeOrEnumExport::Enum(variant_enum));
+        next_id += 1;
+
+        if let Some(variant_info_slice) = enum_info.variant_info() {
+            for variant in variant_info_slice {
+                if let Some(fields) = match &variant.kind {
+                    TiledVariantKind::Unit => None,
+                    TiledVariantKind::Struct { fields } | TiledVariantKind::Tuple { fields } => {
+                        Some(*fields)
+                    }
+                } {
+                    for field in fields {
+                        if let TiledTypeKind::Class { property_type } = &field.tiled_type {
+                            discover_type_recursive(
+                                property_type,
+                                world,
+                                &mut discovered_types,
+                                &mut all_exports,
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    all_exports
+}
+
+/// Convert a [`TiledTypeExport`] to a [`serde_json::Value`] for the project file.
+fn export_type_to_json(t: &TiledTypeExport) -> serde_json::Value {
+    let members: Vec<serde_json::Value> = t
+        .members
+        .iter()
+        .map(|m| {
+            let mut member = serde_json::json!({
+                "name": m.name,
+                "type": m.tiled_type,
+                "value": value_to_json(&m.value)
+            });
+            if let Some(ref pt) = m.property_type {
+                member["propertyType"] = serde_json::Value::String(pt.clone());
+            }
+            member
+        })
+        .collect();
+
+    serde_json::json!({
+        "id": t.id,
+        "name": t.name,
+        "type": "class",
+        "color": "#ff000000",
+        "drawFill": true,
+        "members": members,
+        "useAs": ["property"]
+    })
+}
+
+/// Convert a [`TiledEnumExport`] to a [`serde_json::Value`] for the project file.
+fn export_enum_to_json(e: &TiledEnumExport) -> serde_json::Value {
+    serde_json::json!({
+        "id": e.id,
+        "name": e.name,
+        "type": "enum",
+        "storageType": "string",
+        "values": e.values,
+        "valuesAsFlags": e.values_as_flags
+    })
+}
+
+/// Convert a [`TiledValueExport`] to a [`serde_json::Value`].
+fn value_to_json(value: &TiledValueExport) -> serde_json::Value {
+    match value {
+        TiledValueExport::Bool(b) => serde_json::Value::Bool(*b),
+        TiledValueExport::Int(i) => serde_json::json!(*i),
+        TiledValueExport::Float(f) => serde_json::json!(*f),
+        TiledValueExport::String(s) => serde_json::Value::String(s.clone()),
+        TiledValueExport::Color(hex) => serde_json::Value::String(hex.clone()),
+        TiledValueExport::ClassDefault => serde_json::Value::Null,
+    }
 }
 
 /// Recursively discover a type and all its referenced types.

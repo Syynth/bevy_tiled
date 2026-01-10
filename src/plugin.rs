@@ -50,7 +50,8 @@ use bevy_tiledmap_native::TiledmapNativePlugin;
 ///     .add_plugins(
 ///         BevyTiledmapPlugin::default()
 ///             .with_core(TiledmapCoreConfig {
-///                 export_types_path: Some("assets/tiled_types.json".into()),
+///                 export_target: Some(TypeExportTarget::JsonFile("assets/tiled_types.json".into())),
+///                 ..default()
 ///             })
 ///     )
 ///     .run();

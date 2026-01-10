@@ -4,6 +4,7 @@ use bevy::{
     prelude::*,
     tasks::ConditionalSendFuture,
 };
+use normalize_path::NormalizePath;
 use thiserror::Error;
 
 use crate::assets::{map::TiledMapAsset, world::TiledWorldAsset};
@@ -112,11 +113,15 @@ fn resolve_relative_path(
 
     let full_path = parent.join(relative_path);
 
+    // Normalize to resolve .. and . components
+    // (Path::join does NOT normalize - it just concatenates)
+    let normalized = full_path.normalize();
+
     // Convert to Bevy asset path (forward slashes, no leading slash)
-    let asset_path = full_path
+    let asset_path = normalized
         .to_str()
         .ok_or_else(|| {
-            WorldLoaderError::InvalidPath(format!("Invalid UTF-8 in path: {:?}", full_path))
+            WorldLoaderError::InvalidPath(format!("Invalid UTF-8 in path: {:?}", normalized))
         })?
         .replace('\\', "/");
 

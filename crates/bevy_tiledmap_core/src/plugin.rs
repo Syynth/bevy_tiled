@@ -34,45 +34,77 @@ impl Default for LayerZConfig {
     }
 }
 
+/// Target for type export.
+///
+/// Specifies where to export the registered `TiledClass` types.
+#[derive(Debug, Clone)]
+pub enum TypeExportTarget {
+    /// Export to a standalone JSON file.
+    ///
+    /// The JSON file will contain an array of property type definitions
+    /// that can be imported into Tiled via View → Custom Types → Import.
+    JsonFile(PathBuf),
+
+    /// Export directly to the configured `.tiled-project` file.
+    ///
+    /// This will update the `propertyTypes` array in the project file while
+    /// preserving all other fields (folders, commands, etc.). Requires
+    /// `project_path` to be set in the config.
+    ///
+    /// Any manually-added types in the project file that don't match
+    /// a Rust type will be preserved.
+    TiledProject,
+}
+
 /// Configuration for `TiledmapCorePlugin`.
 ///
 /// # Example
 ///
 /// ```rust,no_run
 /// use bevy::prelude::*;
-/// use bevy_tiledmap_core::{TiledmapCorePlugin, TiledmapCoreConfig};
+/// use bevy_tiledmap_core::{TiledmapCorePlugin, TiledmapCoreConfig, TypeExportTarget};
 ///
 /// App::new()
 ///     .add_plugins(TiledmapCorePlugin::new(TiledmapCoreConfig {
-///         export_types_path: Some("assets/tiled_types.json".into()),
+///         export_target: Some(TypeExportTarget::JsonFile("assets/tiled_types.json".into())),
 ///         project_path: Some("assets/my.tiled-project".into()),
 ///         ..default()
 ///     }));
 /// ```
 #[derive(Debug, Clone, Default)]
 pub struct TiledmapCoreConfig {
-    /// Optional path to export type definitions for Tiled editor.
+    /// Where to export type definitions for Tiled editor.
     ///
-    /// If set, the plugin will export all registered `TiledClass` types to a JSON file
-    /// at startup. This file can be used by Tiled to provide autocomplete for custom
-    /// properties.
+    /// If set, the plugin will export all registered `TiledClass` types at startup.
+    /// Use `TypeExportTarget::JsonFile` to export to a standalone JSON file, or
+    /// `TypeExportTarget::TiledProject` to export directly to the `.tiled-project` file.
     ///
     /// # Example
     ///
     /// ```rust,no_run
-    /// # use bevy_tiledmap_core::TiledmapCoreConfig;
+    /// # use bevy_tiledmap_core::{TiledmapCoreConfig, TypeExportTarget};
+    /// // Export to a standalone JSON file
     /// let config = TiledmapCoreConfig {
-    ///     export_types_path: Some("assets/tiled_types.json".into()),
+    ///     export_target: Some(TypeExportTarget::JsonFile("assets/tiled_types.json".into())),
+    ///     ..Default::default()
+    /// };
+    ///
+    /// // Or export directly to the project file
+    /// let config = TiledmapCoreConfig {
+    ///     export_target: Some(TypeExportTarget::TiledProject),
+    ///     project_path: Some("assets/my.tiled-project".into()),
     ///     ..Default::default()
     /// };
     /// ```
-    pub export_types_path: Option<PathBuf>,
+    pub export_target: Option<TypeExportTarget>,
 
     /// Optional path to a `.tiled-project` file.
     ///
     /// If set, the plugin will load the project file and populate the
     /// `TiledProjectProperties` resource with custom property type definitions.
     /// This allows access to default values for classes and enum variants.
+    ///
+    /// Also required when using `TypeExportTarget::TiledProject`.
     ///
     /// # Example
     ///
@@ -110,11 +142,12 @@ pub struct TiledmapCoreConfig {
 ///
 /// ```rust,no_run
 /// use bevy::prelude::*;
-/// use bevy_tiledmap_core::{TiledmapCorePlugin, TiledmapCoreConfig};
+/// use bevy_tiledmap_core::{TiledmapCorePlugin, TiledmapCoreConfig, TypeExportTarget};
 ///
 /// App::new()
 ///     .add_plugins(TiledmapCorePlugin::new(TiledmapCoreConfig {
-///         export_types_path: Some("assets/tiled_types.json".into()),
+///         export_target: Some(TypeExportTarget::JsonFile("assets/tiled_types.json".into())),
+///         ..default()
 ///     }));
 /// ```
 #[derive(Default)]
@@ -122,10 +155,11 @@ pub struct TiledmapCorePlugin {
     config: TiledmapCoreConfig,
 }
 
-/// Resource to store export path for deferred export
+/// Resource to store export configuration for deferred export
 #[derive(Resource)]
 struct DeferredTypeExport {
-    path: PathBuf,
+    target: TypeExportTarget,
+    project_path: Option<PathBuf>,
 }
 
 /// Resource to track a pending project asset load
@@ -165,8 +199,11 @@ impl Plugin for TiledmapCorePlugin {
 
         // Schedule type export at startup if configured
         // Must be done at startup to have access to AppTypeRegistry for reflection
-        if let Some(path) = &self.config.export_types_path {
-            app.insert_resource(DeferredTypeExport { path: path.clone() });
+        if let Some(target) = &self.config.export_target {
+            app.insert_resource(DeferredTypeExport {
+                target: target.clone(),
+                project_path: self.config.project_path.clone(),
+            });
             app.add_systems(Startup, export_types_at_startup);
         }
 
@@ -211,17 +248,28 @@ impl Plugin for TiledmapCorePlugin {
 
 /// System that exports types at startup using reflection-based discovery
 fn export_types_at_startup(world: &mut World) {
-    let path = world
-        .remove_resource::<DeferredTypeExport>()
-        .expect("DeferredTypeExport resource should exist")
-        .path;
+    use crate::properties::export_to_tiled_project;
 
-    // export_all_types_with_reflection needs access to the world
-    // We pass a reference to the world and handle it internally
-    if let Err(e) = export_all_types_with_reflection(world, &path) {
-        error!("Failed to export Tiled types to {}: {}", path.display(), e);
-    } else {
-        info!("Exported Tiled types to {}", path.display());
+    let deferred = world
+        .remove_resource::<DeferredTypeExport>()
+        .expect("DeferredTypeExport resource should exist");
+
+    let result = match &deferred.target {
+        TypeExportTarget::JsonFile(path) => export_all_types_with_reflection(world, path)
+            .map(|_| format!("Exported Tiled types to {}", path.display())),
+        TypeExportTarget::TiledProject => {
+            let project_path = deferred
+                .project_path
+                .as_ref()
+                .expect("project_path is required for TypeExportTarget::TiledProject");
+            export_to_tiled_project(world, project_path)
+                .map(|_| format!("Exported Tiled types to {}", project_path.display()))
+        }
+    };
+
+    match result {
+        Ok(msg) => info!("{}", msg),
+        Err(e) => error!("Failed to export Tiled types: {}", e),
     }
 }
 
