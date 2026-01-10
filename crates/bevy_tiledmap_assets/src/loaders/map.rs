@@ -434,35 +434,51 @@ fn resolve_relative_path(
     load_context: &LoadContext,
     relative_path: &str,
 ) -> Result<String, MapLoaderError> {
-    // If the path already starts with "assets/", it's an absolute filesystem path
-    // from the tiled loader - just strip the prefix
+    // Normalize input to forward slashes (tiled uses forward slashes,
+    // but paths from tiled crate on Windows might have backslashes)
+    let relative_path = relative_path.replace('\\', "/");
+
+    // If path starts with "assets/", strip it and normalize what remains
+    // (tiled crate returns paths like "assets/maps/../art/foo.png")
     if let Some(stripped) = relative_path.strip_prefix("assets/") {
-        return Ok(stripped.to_string());
+        let normalized = std::path::Path::new(stripped).normalize();
+        return normalized
+            .to_str()
+            .map(|s| s.replace('\\', "/"))
+            .ok_or_else(|| {
+                MapLoaderError::InvalidPath(format!("Invalid UTF-8 in path: {:?}", normalized))
+            });
     }
 
-    // Otherwise, resolve relative to the current asset's parent directory
+    // Get parent directory as forward-slash string
     let parent = load_context.asset_path().path().parent().ok_or_else(|| {
         MapLoaderError::InvalidPath(format!(
             "No parent directory for asset: {:?}",
             load_context.asset_path().path()
         ))
     })?;
+    let parent_str = parent.to_str().ok_or_else(|| {
+        MapLoaderError::InvalidPath(format!("Invalid UTF-8 in path: {:?}", parent))
+    })?;
+    let parent_str = parent_str.replace('\\', "/");
 
-    let full_path = parent.join(relative_path);
+    // Join with forward slash (avoid Path::join which has platform-specific behavior)
+    let full_path = if parent_str.is_empty() {
+        relative_path
+    } else {
+        format!("{}/{}", parent_str, relative_path)
+    };
 
     // Normalize to resolve .. and . components
-    // (Path::join does NOT normalize - it just concatenates)
-    let normalized = full_path.normalize();
+    let normalized = std::path::Path::new(&full_path).normalize();
 
-    // Convert to Bevy asset path (forward slashes, no leading slash)
-    let asset_path = normalized
+    // Convert to Bevy asset path (forward slashes)
+    normalized
         .to_str()
+        .map(|s| s.replace('\\', "/"))
         .ok_or_else(|| {
             MapLoaderError::InvalidPath(format!("Invalid UTF-8 in path: {:?}", normalized))
-        })?
-        .replace('\\', "/");
-
-    Ok(asset_path)
+        })
 }
 
 /// Normalize all `FileValue` paths in properties to be asset-root-relative.

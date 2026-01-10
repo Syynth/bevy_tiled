@@ -12,7 +12,7 @@
 //!
 //! App::new()
 //!     .add_plugins(TiledmapCorePlugin::new(TiledmapCoreConfig {
-//!         project_path: Some("assets/my.tiled-project".into()),
+//!         project_path: Some("my.tiled-project".into()),
 //!         ..default()
 //!     }));
 //!

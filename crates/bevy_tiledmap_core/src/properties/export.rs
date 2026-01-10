@@ -820,11 +820,12 @@ pub fn export_all_types_with_reflection(
 /// # Arguments
 ///
 /// * `world` - The Bevy World (for accessing registries)
-/// * `project_path` - Path to the `.tiled-project` file
+/// * `project_path` - Filesystem path to the `.tiled-project` file
 ///
 /// # Example
 ///
 /// ```ignore
+/// // Full filesystem path (not asset-relative)
 /// export_to_tiled_project(world, "assets/my.tiled-project")?;
 /// ```
 pub fn export_to_tiled_project(
